@@ -1,11 +1,10 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "vault-bot",
+	"name": "Vault Bot",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Vault Bot is a versatile AI assistant plugin for Obsidian.",
+	"author": "srijrao on Github",
+	"authorUrl": "https://github.com/srijrao",
 	"isDesktopOnly": false
 }
