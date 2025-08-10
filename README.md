@@ -1,94 +1,101 @@
-# Obsidian Sample Plugin
+# Vault Bot
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+A versatile AI assistant plugin for Obsidian that enables seamless interaction with AI models directly within your notes.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+- **Text Selection AI Response**: Highlight any text in your notes and get AI-powered responses instantly
+- **Streaming Responses**: Real-time streaming of AI responses for immediate feedback
+- **Customizable Chat Separator**: Configure how AI conversations are formatted in your notes
+- **Multiple AI Provider Support**: Currently supports OpenAI with extensible architecture for future providers
+- **Configurable AI Settings**: Adjust model, temperature, system prompts, and other AI parameters
+- **Response Control**: Start and stop AI responses at any time
 
-## First time developing plugins?
+## Commands
 
-Quick starting guide for new plugin devs:
+The plugin adds two commands to Obsidian:
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+- **Get Response**: Sends highlighted text to the AI and streams the response directly into your note
+- **Stop Response**: Cancels an ongoing AI response generation
 
-## Releasing new releases
+## How to Use
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+1. **Setup**: Configure your API key and AI provider settings in the plugin settings tab
+2. **Get AI Response**: 
+   - Highlight any text in your note
+   - Use the command palette (Ctrl/Cmd + P) and search for "Get Response"
+   - Or assign a hotkey to the "Get Response" command
+   - The AI will process your highlighted text and stream the response directly into your note
+3. **Stop Response**: Use the "Stop Response" command to cancel an ongoing AI response
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+## Configuration
 
-## Adding your plugin to the community plugin list
+Access the plugin settings through Settings → Community Plugins → Vault Bot:
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+- **API Key**: Your OpenAI API key
+- **API Provider**: Currently supports OpenAI (more providers coming soon)
+- **Chat Separator**: The text used to separate your query from the AI response (default: `\n\n----\n\n`)
+- **AI Provider Settings**:
+  - **Model**: Choose your preferred OpenAI model (default: gpt-4o)
+  - **System Prompt**: Customize the AI's behavior and personality
+  - **Temperature**: Control response creativity (0.0 = deterministic, 2.0 = very creative)
 
-## How to use
+## Installation
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+### From Obsidian Community Plugins (Recommended)
+1. Open Obsidian Settings
+2. Go to Community Plugins and disable Safe Mode
+3. Click Browse and search for "Vault Bot"
+4. Install and enable the plugin
 
-## Manually installing the plugin
+### Manual Installation
+1. Download the latest release from the [GitHub releases page](https://github.com/srijrao/Vault-Bot/releases)
+2. Extract the files to your vault's plugins folder: `VaultFolder/.obsidian/plugins/vault-bot/`
+3. Reload Obsidian and enable the plugin in settings
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+## Development
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
+This plugin is built with TypeScript and uses modern development practices.
 
-## Funding URL
+### Setup
+- Ensure Node.js v16 or higher is installed (`node --version`)
+- Clone this repository
+- Run `npm install` to install dependencies
+- Run `npm run dev` to start development mode with hot reloading
 
-You can include funding URLs where people who use your plugin can financially support it.
+### Building
+- Run `npm run build` to create a production build
+- Run `npm test` to run the test suite
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+### Project Structure
+```
+src/
+├── aiprovider.ts     # AI provider interfaces and implementations
+├── command_handler.ts # Command handling and response streaming
+└── settings.ts       # Plugin settings and configuration UI
 ```
 
-If you have multiple URLs, you can also do:
+## Contributing
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
+Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
 
-## API Documentation
+## License
 
-See https://github.com/obsidianmd/obsidian-api
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built on the [Obsidian Plugin API](https://github.com/obsidianmd/obsidian-api)
+- Uses OpenAI API for AI capabilities
+- Inspired by the need for seamless AI integration in note-taking workflows
+
+## Support
+
+If you find this plugin helpful, consider:
+- ⭐ Starring the repository
+- 🐛 Reporting bugs or suggesting features
+- 🤝 Contributing to the codebase
+
+---
+
+*Created by [srijrao](https://github.com/srijrao)*
