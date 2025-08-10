@@ -21,7 +21,7 @@ The plugin adds two commands to Obsidian:
 ## How to Use
 
 1. **Setup**: Configure your API key and AI provider settings in the plugin settings tab
-2. **Get AI Response**: 
+2. **Get AI Response**:
    - Highlight any text in your note
    - Use the command palette (Ctrl/Cmd + P) and search for "Get Response"
    - Or assign a hotkey to the "Get Response" command
@@ -43,12 +43,14 @@ Access the plugin settings through Settings → Community Plugins → Vault Bot:
 ## Installation
 
 ### From Obsidian Community Plugins (Recommended)
+
 1. Open Obsidian Settings
 2. Go to Community Plugins and disable Safe Mode
 3. Click Browse and search for "Vault Bot"
 4. Install and enable the plugin
 
 ### Manual Installation
+
 1. Download the latest release from the [GitHub releases page](https://github.com/srijrao/Vault-Bot/releases)
 2. Extract the files to your vault's plugins folder: `VaultFolder/.obsidian/plugins/vault-bot/`
 3. Reload Obsidian and enable the plugin in settings
@@ -58,16 +60,19 @@ Access the plugin settings through Settings → Community Plugins → Vault Bot:
 This plugin is built with TypeScript and uses modern development practices.
 
 ### Setup
+
 - Ensure Node.js v16 or higher is installed (`node --version`)
 - Clone this repository
 - Run `npm install` to install dependencies
 - Run `npm run dev` to start development mode with hot reloading
 
 ### Building
+
 - Run `npm run build` to create a production build
 - Run `npm test` to run the test suite
 
 ### Project Structure
+
 ```
 src/
 ├── aiprovider.ts     # AI provider interfaces and implementations
@@ -92,6 +97,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 If you find this plugin helpful, consider:
+
 - ⭐ Starring the repository
 - 🐛 Reporting bugs or suggesting features
 - 🤝 Contributing to the codebase
