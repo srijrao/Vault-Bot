@@ -1,5 +1,5 @@
 import { Editor, MarkdownView, Notice } from 'obsidian';
-import { OpenAIProvider } from './aiprovider';
+import { AIProviderWrapper } from './aiprovider';
 import VaultBotPlugin from '../main';
 
 export class CommandHandler {
@@ -79,7 +79,7 @@ export class CommandHandler {
             const signal = this.abortController.signal;
 
             try {
-                const provider = new OpenAIProvider(this.plugin.settings);
+                const provider = new AIProviderWrapper(this.plugin.settings);
                 const initialContent = selection + this.plugin.settings.chatSeparator;
                 
                 // Get the selection range before replacing

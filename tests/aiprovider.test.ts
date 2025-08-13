@@ -1,131 +1,240 @@
-import OpenAI from "openai";
 import { vi, expect, describe, it, beforeEach } from "vitest";
-import { OpenAIProvider, OpenAIProviderSettings } from "../src/aiprovider";
+import { AIProviderWrapper } from "../src/aiprovider";
 import { VaultBotPluginSettings } from "../src/settings";
+import { OpenAIProvider, OpenRouterProvider } from "../src/providers";
+import type { OpenAIProviderSettings, OpenRouterProviderSettings } from "../src/aiprovider";
 
-// Mock the entire 'openai' module
-vi.mock("openai", () => {
-    const mockCreate = vi.fn();
-    const MockOpenAI = vi.fn().mockImplementation(() => {
-        return {
-            chat: {
-                completions: {
-                    create: mockCreate,
-                },
-            },
-        };
-    });
-    return {
-        default: MockOpenAI,
-        __mockCreate: mockCreate,
-    };
-});
+// Mock the provider modules
+vi.mock("../src/providers/openai", () => ({
+    OpenAIProvider: vi.fn(),
+}));
 
-// Helper to create a mock async stream
-async function* createMockStream(chunks: string[]) {
-    for (const chunk of chunks) {
-        // A short delay to allow for abortion to be tested
-        await new Promise(resolve => setTimeout(resolve, 10));
-        yield {
-            choices: [{ delta: { content: chunk } }],
-        };
-    }
-}
+vi.mock("../src/providers/openrouter", () => ({
+    OpenRouterProvider: vi.fn(),
+}));
 
-// A simple error class to mock OpenAI's AbortError
-class MockAbortError extends Error {
-    constructor() {
-        super("The request was aborted.");
-        this.name = "AbortError";
-    }
-}
+// Mock OpenAI module since it's imported by the providers
+vi.mock("openai", () => ({
+    default: vi.fn(),
+}));
 
-describe("OpenAIProvider", () => {
-    let provider: OpenAIProvider;
-    let mockSettings: VaultBotPluginSettings;
-    let mockCreate: ReturnType<typeof vi.fn>;
+describe("AIProviderWrapper", () => {
+    let mockOpenAIProvider: any;
+    let mockOpenRouterProvider: any;
 
-    beforeEach(async () => {
-        // Reset mocks before each test
+    beforeEach(() => {
         vi.clearAllMocks();
-        // Import the mocked module to get access to the mock
-        const openai = await import("openai") as any;
-        mockCreate = openai.__mockCreate;
-        mockCreate.mockReset();
-
-        const openAIProviderSettings: OpenAIProviderSettings = {
-            model: "gpt-4-test",
-            system_prompt: "You are a testing assistant.",
-            temperature: 0.5,
+        
+        // Create mock instances
+        mockOpenAIProvider = {
+            getStreamingResponse: vi.fn(),
         };
-        mockSettings = {
-            apiKey: "test-api-key",
+        
+        mockOpenRouterProvider = {
+            getStreamingResponse: vi.fn(),
+        };
+
+        // Mock the constructors to return our mock instances
+        (OpenAIProvider as any).mockImplementation(() => mockOpenAIProvider);
+        (OpenRouterProvider as any).mockImplementation(() => mockOpenRouterProvider);
+    });
+
+    it("should create OpenAI provider when apiProvider is 'openai'", () => {
+        const settings: VaultBotPluginSettings = {
             apiProvider: "openai",
             chatSeparator: "---",
             aiProviderSettings: {
-                openai: openAIProviderSettings,
+                openai: {
+                    api_key: "test-key",
+                    model: "gpt-4o",
+                    system_prompt: "Test prompt",
+                    temperature: 0.7,
+                } as OpenAIProviderSettings,
             },
         };
-    });
 
-    it("should stream responses correctly in the happy path", async () => {
-        const mockStream = createMockStream([
-            "Hello",
-            ", ",
-            "world",
-            "!",
-        ]);
-        mockCreate.mockReturnValue(mockStream);
+        const wrapper = new AIProviderWrapper(settings);
 
-        provider = new OpenAIProvider(mockSettings);
-
-        const onUpdate = vi.fn();
-        const abortController = new AbortController();
-
-        await provider.getStreamingResponse(
-            "Hi there!",
-            onUpdate,
-            abortController.signal
-        );
-
-        expect(onUpdate).toHaveBeenCalledTimes(4);
-        expect(onUpdate).toHaveBeenNthCalledWith(1, "Hello");
-        expect(onUpdate).toHaveBeenNthCalledWith(2, ", ");
-        expect(onUpdate).toHaveBeenNthCalledWith(3, "world");
-        expect(onUpdate).toHaveBeenNthCalledWith(4, "!");
-    });
-
-    it("should handle cancellation gracefully", async () => {
-        // The mock implementation will throw an AbortError if the signal is aborted.
-        mockCreate.mockImplementation(async (params: any, options?: { signal?: AbortSignal }) => {
-            const signal = options?.signal;
-            if (signal?.aborted) {
-                throw new MockAbortError();
-            }
-            // Return a promise that never resolves, but rejects on abort
-            return new Promise((_, reject) => {
-                signal?.addEventListener('abort', () => {
-                    reject(new MockAbortError());
-                });
-            });
+        expect(OpenAIProvider).toHaveBeenCalledWith({
+            api_key: "test-key",
+            model: "gpt-4o",
+            system_prompt: "Test prompt",
+            temperature: 0.7,
         });
 
-        provider = new OpenAIProvider(mockSettings);
+        expect(OpenRouterProvider).not.toHaveBeenCalled();
+    });
 
+    it("should create OpenRouter provider when apiProvider is 'openrouter'", () => {
+        const settings: VaultBotPluginSettings = {
+            apiProvider: "openrouter",
+            chatSeparator: "---",
+            aiProviderSettings: {
+                openrouter: {
+                    api_key: "test-key",
+                    model: "openai/gpt-4o",
+                    system_prompt: "Test prompt",
+                    temperature: 0.7,
+                    site_url: "https://example.com",
+                    site_name: "Test App",
+                } as OpenRouterProviderSettings,
+            },
+        };
+
+        const wrapper = new AIProviderWrapper(settings);
+
+        expect(OpenRouterProvider).toHaveBeenCalledWith({
+            api_key: "test-key",
+            model: "openai/gpt-4o",
+            system_prompt: "Test prompt",
+            temperature: 0.7,
+            site_url: "https://example.com",
+            site_name: "Test App",
+        });
+
+        expect(OpenAIProvider).not.toHaveBeenCalled();
+    });
+
+    it("should throw error for unsupported provider", () => {
+        const settings: VaultBotPluginSettings = {
+            apiProvider: "unsupported",
+            chatSeparator: "---",
+            aiProviderSettings: {},
+        };
+
+        expect(() => new AIProviderWrapper(settings)).toThrow(
+            "Unsupported AI provider: unsupported"
+        );
+    });
+
+    it("should delegate getStreamingResponse to underlying provider", async () => {
+        const settings: VaultBotPluginSettings = {
+            apiProvider: "openai",
+            chatSeparator: "---",
+            aiProviderSettings: {
+                openai: {
+                    api_key: "test-key",
+                    model: "gpt-4o",
+                    system_prompt: "Test prompt",
+                    temperature: 0.7,
+                } as OpenAIProviderSettings,
+            },
+        };
+
+        const wrapper = new AIProviderWrapper(settings);
         const onUpdate = vi.fn();
         const abortController = new AbortController();
 
-        const promise = provider.getStreamingResponse(
-            "A long prompt",
+        await wrapper.getStreamingResponse(
+            "Test prompt",
             onUpdate,
             abortController.signal
         );
 
-        abortController.abort();
+        expect(mockOpenAIProvider.getStreamingResponse).toHaveBeenCalledWith(
+            "Test prompt",
+            onUpdate,
+            abortController.signal
+        );
+    });
 
-        // Assert that the promise completes without error and no updates are sent.
-        // The provider should catch the AbortError and handle it.
-        await expect(promise).resolves.toBeUndefined();
-        expect(onUpdate).not.toHaveBeenCalled();
+    it("should update provider when settings change", () => {
+        const initialSettings: VaultBotPluginSettings = {
+            apiProvider: "openai",
+            chatSeparator: "---",
+            aiProviderSettings: {
+                openai: {
+                    api_key: "test-key",
+                    model: "gpt-4o",
+                    system_prompt: "Test prompt",
+                    temperature: 0.7,
+                } as OpenAIProviderSettings,
+            },
+        };
+
+        const wrapper = new AIProviderWrapper(initialSettings);
+
+        // Verify initial provider was created
+        expect(OpenAIProvider).toHaveBeenCalledTimes(1);
+
+        const newSettings: VaultBotPluginSettings = {
+            apiProvider: "openrouter",
+            chatSeparator: "---",
+            aiProviderSettings: {
+                openrouter: {
+                    api_key: "new-key",
+                    model: "openai/gpt-4o",
+                    system_prompt: "New prompt",
+                    temperature: 0.5,
+                    site_url: "https://example.com",
+                    site_name: "Test App",
+                } as OpenRouterProviderSettings,
+            },
+        };
+
+        wrapper.updateProvider(newSettings);
+
+        // Verify new provider was created
+        expect(OpenRouterProvider).toHaveBeenCalledWith({
+            api_key: "new-key",
+            model: "openai/gpt-4o",
+            system_prompt: "New prompt",
+            temperature: 0.5,
+            site_url: "https://example.com",
+            site_name: "Test App",
+        });
+    });
+
+    it("should handle provider switching correctly", async () => {
+        const initialSettings: VaultBotPluginSettings = {
+            apiProvider: "openai",
+            chatSeparator: "---",
+            aiProviderSettings: {
+                openai: {
+                    api_key: "test-key",
+                    model: "gpt-4o",
+                    system_prompt: "Test prompt",
+                    temperature: 0.7,
+                } as OpenAIProviderSettings,
+            },
+        };
+
+        const wrapper = new AIProviderWrapper(initialSettings);
+
+        // Test initial provider
+        const onUpdate1 = vi.fn();
+        const abortController1 = new AbortController();
+        await wrapper.getStreamingResponse("Test 1", onUpdate1, abortController1.signal);
+        expect(mockOpenAIProvider.getStreamingResponse).toHaveBeenCalledWith(
+            "Test 1",
+            onUpdate1,
+            abortController1.signal
+        );
+
+        // Switch to OpenRouter
+        const newSettings: VaultBotPluginSettings = {
+            apiProvider: "openrouter",
+            chatSeparator: "---",
+            aiProviderSettings: {
+                openrouter: {
+                    api_key: "test-key",
+                    model: "openai/gpt-4o",
+                    system_prompt: "Test prompt",
+                    temperature: 0.7,
+                } as OpenRouterProviderSettings,
+            },
+        };
+
+        wrapper.updateProvider(newSettings);
+
+        // Test new provider
+        const onUpdate2 = vi.fn();
+        const abortController2 = new AbortController();
+        await wrapper.getStreamingResponse("Test 2", onUpdate2, abortController2.signal);
+        expect(mockOpenRouterProvider.getStreamingResponse).toHaveBeenCalledWith(
+            "Test 2",
+            onUpdate2,
+            abortController2.signal
+        );
     });
 });

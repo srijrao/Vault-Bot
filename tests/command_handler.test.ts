@@ -11,10 +11,10 @@ vi.mock('obsidian', () => ({
     },
 }));
 
-// Mock OpenAI Provider
+// Mock AI Provider Wrapper
 const mockGetStreamingResponse = vi.fn();
 vi.mock('../src/aiprovider', () => ({
-    OpenAIProvider: vi.fn().mockImplementation(() => ({
+    AIProviderWrapper: vi.fn().mockImplementation(() => ({
         getStreamingResponse: mockGetStreamingResponse,
     })),
 }));

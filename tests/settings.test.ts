@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { VaultBotSettingTab, DEFAULT_SETTINGS } from '../src/settings';
-import { OpenAIProviderSettings } from '../src/aiprovider';
+import type { OpenAIProviderSettings, OpenRouterProviderSettings } from '../src/aiprovider';
 import VaultBotPlugin from '../main';
 
 // Mock Obsidian Setting class
@@ -10,6 +10,7 @@ const mockSetting = {
     addText: vi.fn().mockReturnThis(),
     addTextArea: vi.fn().mockReturnThis(),
     addSlider: vi.fn().mockReturnThis(),
+    addDropdown: vi.fn().mockReturnThis(),
 };
 
 const mockTextInput = {
@@ -23,6 +24,12 @@ const mockSlider = {
     setLimits: vi.fn().mockReturnThis(),
     setValue: vi.fn().mockReturnThis(),
     setDynamicTooltip: vi.fn().mockReturnThis(),
+    onChange: vi.fn().mockReturnThis(),
+};
+
+const mockDropdown = {
+    addOption: vi.fn().mockReturnThis(),
+    setValue: vi.fn().mockReturnThis(),
     onChange: vi.fn().mockReturnThis(),
 };
 
@@ -54,6 +61,10 @@ vi.mock('obsidian', () => ({
             callback(mockSlider);
             return setting;
         });
+        setting.addDropdown = vi.fn((callback) => {
+            callback(mockDropdown);
+            return setting;
+        });
         return setting;
     }),
     App: vi.fn(),
@@ -80,18 +91,18 @@ describe('VaultBotSettingTab', () => {
         expect(mockContainerEl.empty).toHaveBeenCalled();
         expect(mockContainerEl.createEl).toHaveBeenCalledWith('h2', { text: 'OpenAI Provider Settings' });
         
-        // Should create 5 settings: API Key, Chat Separator, Model, System Prompt, Temperature
+        // Should create 6 settings: Provider Dropdown, API Key, Chat Separator, Model, System Prompt, Temperature
         const { Setting } = await import('obsidian');
-        expect(Setting).toHaveBeenCalledTimes(5);
+        expect(Setting).toHaveBeenCalledTimes(6);
     });
 
     it('should set up API Key setting correctly', () => {
         settingTab.display();
         
         expect(mockSetting.setName).toHaveBeenCalledWith('API Key');
-        expect(mockSetting.setDesc).toHaveBeenCalledWith('Your API key for the selected AI provider.');
+        expect(mockSetting.setDesc).toHaveBeenCalledWith('Your API key for OpenAI.');
         expect(mockTextInput.setPlaceholder).toHaveBeenCalledWith('Enter your API key');
-        expect(mockTextInput.setValue).toHaveBeenCalledWith(plugin.settings.apiKey);
+        expect(mockTextInput.setValue).toHaveBeenCalledWith((plugin.settings.aiProviderSettings.openai as any).api_key);
     });
 
     it('should set up temperature slider correctly', () => {
@@ -114,11 +125,14 @@ describe('VaultBotSettingTab', () => {
 
 describe('DEFAULT_SETTINGS', () => {
     it('should have correct default values', () => {
-        expect(DEFAULT_SETTINGS.apiKey).toBe('');
         expect(DEFAULT_SETTINGS.apiProvider).toBe('openai');
         expect(DEFAULT_SETTINGS.chatSeparator).toBe('\n\n----\n\n');
+        expect((DEFAULT_SETTINGS.aiProviderSettings.openai as OpenAIProviderSettings).api_key).toBe('');
         expect((DEFAULT_SETTINGS.aiProviderSettings.openai as OpenAIProviderSettings).model).toBe('gpt-4o');
         expect((DEFAULT_SETTINGS.aiProviderSettings.openai as OpenAIProviderSettings).system_prompt).toBe('You are a helpful assistant.');
         expect((DEFAULT_SETTINGS.aiProviderSettings.openai as OpenAIProviderSettings).temperature).toBe(1.0);
+        expect((DEFAULT_SETTINGS.aiProviderSettings.openrouter as OpenRouterProviderSettings).api_key).toBe('');
+        expect((DEFAULT_SETTINGS.aiProviderSettings.openrouter as OpenRouterProviderSettings).model).toBe('openai/gpt-4o');
+        expect((DEFAULT_SETTINGS.aiProviderSettings.openrouter as OpenRouterProviderSettings).site_name).toBe('Obsidian Vault-Bot');
     });
 });

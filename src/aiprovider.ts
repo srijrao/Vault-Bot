@@ -1,62 +1,50 @@
 import { VaultBotPluginSettings } from "./settings";
-import OpenAI from "openai";
+import { 
+    AIProvider, 
+    OpenAIProvider, 
+    OpenRouterProvider, 
+    type OpenAIProviderSettings, 
+    type OpenRouterProviderSettings 
+} from "./providers";
 
-export interface AIProvider {
-    getStreamingResponse(prompt: string, onUpdate: (text: string) => void, signal: AbortSignal): Promise<void>;
-}
+export type ProviderType = 'openai' | 'openrouter';
 
-export interface AIProviderSettings {
-    // Marker interface for provider-specific settings
-}
-
-export interface OpenAIProviderSettings extends AIProviderSettings {
-    model: string;
-    system_prompt: string;
-    temperature: number;
-}
-
-export class OpenAIProvider implements AIProvider {
+export class AIProviderWrapper {
     private settings: VaultBotPluginSettings;
-    private openai: OpenAI;
+    private provider: AIProvider;
 
     constructor(settings: VaultBotPluginSettings) {
         this.settings = settings;
-        this.openai = new OpenAI({
-            apiKey: this.settings.apiKey,
-            dangerouslyAllowBrowser: true
-        });
+        this.provider = this.createProvider();
+    }
+
+    private createProvider(): AIProvider {
+        const providerType = this.settings.apiProvider as ProviderType;
+
+        switch (providerType) {
+            case 'openai':
+                const openaiSettings = this.settings.aiProviderSettings['openai'] as OpenAIProviderSettings;
+                return new OpenAIProvider(openaiSettings);
+            
+            case 'openrouter':
+                const openrouterSettings = this.settings.aiProviderSettings['openrouter'] as OpenRouterProviderSettings;
+                return new OpenRouterProvider(openrouterSettings);
+            
+            default:
+                throw new Error(`Unsupported AI provider: ${providerType}`);
+        }
     }
 
     async getStreamingResponse(prompt: string, onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
-        const openaiSettings = this.settings.aiProviderSettings['openai'] as OpenAIProviderSettings;
-        try {
-            const stream = await this.openai.chat.completions.create({
-                model: openaiSettings.model,
-                messages: [
-                    {
-                        role: 'system',
-                        content: openaiSettings.system_prompt
-                    },
-                    {
-                        role: 'user',
-                        content: prompt
-                    }
-                ],
-                temperature: openaiSettings.temperature,
-                stream: true,
-            }, { signal });
+        return this.provider.getStreamingResponse(prompt, onUpdate, signal);
+    }
 
-            for await (const chunk of stream) {
-                onUpdate(chunk.choices[0]?.delta?.content || '');
-            }
-
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.log('OpenAI request was aborted.');
-            } else {
-                console.error('Error in OpenAI API request:', error);
-                throw new Error('Failed to get response from OpenAI.');
-            }
-        }
+    // Method to recreate the provider when settings change
+    updateProvider(newSettings: VaultBotPluginSettings): void {
+        this.settings = newSettings;
+        this.provider = this.createProvider();
     }
 }
+
+// Re-export types for backward compatibility
+export type { OpenAIProviderSettings, OpenRouterProviderSettings } from "./providers";
