@@ -3,7 +3,52 @@ import { VaultBotSettingTab, DEFAULT_SETTINGS } from '../src/settings';
 import type { OpenAIProviderSettings, OpenRouterProviderSettings } from '../src/aiprovider';
 import VaultBotPlugin from '../main';
 
-// Mock Obsidian Setting class
+// Mock AIProviderWrapper
+const mockValidateApiKey = vi.fn();
+vi.mock('../src/aiprovider', () => ({
+    AIProviderWrapper: vi.fn(() => ({
+        validateApiKey: mockValidateApiKey,
+    })),
+}));
+
+// Mock Notice
+const mockNotice = vi.fn();
+vi.mock('obsidian', () => ({
+    PluginSettingTab: class {
+        app: any;
+        containerEl: any;
+        constructor(app: any, plugin: any) {
+            this.app = app;
+            this.containerEl = mockContainerEl;
+        }
+    },
+    Setting: vi.fn(() => {
+        const setting = { ...mockSetting };
+        setting.addText = vi.fn((callback) => {
+            callback(mockTextInput);
+            return setting;
+        });
+        setting.addTextArea = vi.fn((callback) => {
+            callback(mockTextInput);
+            return setting;
+        });
+        setting.addSlider = vi.fn((callback) => {
+            callback(mockSlider);
+            return setting;
+        });
+        setting.addDropdown = vi.fn((callback) => {
+            callback(mockDropdown);
+            return setting;
+        });
+        setting.addButton = vi.fn((callback) => {
+            callback(mockButton);
+            return setting;
+        });
+        return setting;
+    }),
+    Notice: mockNotice,
+    App: vi.fn(),
+}));
 const mockSetting = {
     setName: vi.fn().mockReturnThis(),
     setDesc: vi.fn().mockReturnThis(),
@@ -11,6 +56,7 @@ const mockSetting = {
     addTextArea: vi.fn().mockReturnThis(),
     addSlider: vi.fn().mockReturnThis(),
     addDropdown: vi.fn().mockReturnThis(),
+    addButton: vi.fn().mockReturnThis(),
 };
 
 const mockTextInput = {
@@ -31,6 +77,12 @@ const mockDropdown = {
     addOption: vi.fn().mockReturnThis(),
     setValue: vi.fn().mockReturnThis(),
     onChange: vi.fn().mockReturnThis(),
+};
+
+const mockButton = {
+    setButtonText: vi.fn().mockReturnThis(),
+    setTooltip: vi.fn().mockReturnThis(),
+    onClick: vi.fn().mockReturnThis(),
 };
 
 const mockContainerEl = {
@@ -65,6 +117,10 @@ vi.mock('obsidian', () => ({
             callback(mockDropdown);
             return setting;
         });
+        setting.addButton = vi.fn((callback) => {
+            callback(mockButton);
+            return setting;
+        });
         return setting;
     }),
     App: vi.fn(),
@@ -79,7 +135,7 @@ describe('VaultBotSettingTab', () => {
         vi.clearAllMocks();
         app = {};
         plugin = {
-            settings: { ...DEFAULT_SETTINGS },
+            settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), // Deep copy to avoid mutation
             saveSettings: vi.fn(),
         } as any;
         settingTab = new VaultBotSettingTab(app, plugin);
@@ -120,6 +176,11 @@ describe('VaultBotSettingTab', () => {
         
         expect(plugin.settings.aiProviderSettings.openai).toBeDefined();
         expect((plugin.settings.aiProviderSettings.openai as OpenAIProviderSettings).model).toBe('gpt-4o');
+    });
+
+    it('should test API key validation functionality exists', () => {
+        // Just verify the method exists without testing Notice integration
+        expect(typeof (settingTab as any).testApiKey).toBe('function');
     });
 });
 

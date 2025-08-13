@@ -28,10 +28,12 @@ describe("AIProviderWrapper", () => {
         // Create mock instances
         mockOpenAIProvider = {
             getStreamingResponse: vi.fn(),
+            validateApiKey: vi.fn(),
         };
         
         mockOpenRouterProvider = {
             getStreamingResponse: vi.fn(),
+            validateApiKey: vi.fn(),
         };
 
         // Mock the constructors to return our mock instances
@@ -236,5 +238,110 @@ describe("AIProviderWrapper", () => {
             onUpdate2,
             abortController2.signal
         );
+    });
+
+    describe("API Key Validation", () => {
+        it("should delegate validateApiKey to OpenAI provider", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "Test prompt",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            mockOpenAIProvider.validateApiKey.mockResolvedValue({ valid: true });
+
+            const wrapper = new AIProviderWrapper(settings);
+            const result = await wrapper.validateApiKey();
+
+            expect(mockOpenAIProvider.validateApiKey).toHaveBeenCalledOnce();
+            expect(result.valid).toBe(true);
+        });
+
+        it("should delegate validateApiKey to OpenRouter provider", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openrouter",
+                chatSeparator: "---",
+                aiProviderSettings: {
+                    openrouter: {
+                        api_key: "test-key",
+                        model: "openai/gpt-4o",
+                        system_prompt: "Test prompt",
+                        temperature: 0.7,
+                        site_url: "https://example.com",
+                        site_name: "Test App",
+                    } as OpenRouterProviderSettings,
+                },
+            };
+
+            mockOpenRouterProvider.validateApiKey.mockResolvedValue({ 
+                valid: false, 
+                error: "Invalid API key" 
+            });
+
+            const wrapper = new AIProviderWrapper(settings);
+            const result = await wrapper.validateApiKey();
+
+            expect(mockOpenRouterProvider.validateApiKey).toHaveBeenCalledOnce();
+            expect(result.valid).toBe(false);
+            expect(result.error).toBe("Invalid API key");
+        });
+
+        it("should handle validation after provider switch", async () => {
+            const initialSettings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "Test prompt",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            mockOpenAIProvider.validateApiKey.mockResolvedValue({ valid: true });
+
+            const wrapper = new AIProviderWrapper(initialSettings);
+            
+            // Test initial provider validation
+            let result = await wrapper.validateApiKey();
+            expect(mockOpenAIProvider.validateApiKey).toHaveBeenCalledOnce();
+            expect(result.valid).toBe(true);
+
+            // Switch to OpenRouter
+            const newSettings: VaultBotPluginSettings = {
+                apiProvider: "openrouter",
+                chatSeparator: "---",
+                aiProviderSettings: {
+                    openrouter: {
+                        api_key: "test-key",
+                        model: "openai/gpt-4o",
+                        system_prompt: "Test prompt",
+                        temperature: 0.7,
+                    } as OpenRouterProviderSettings,
+                },
+            };
+
+            mockOpenRouterProvider.validateApiKey.mockResolvedValue({ 
+                valid: false, 
+                error: "Invalid API key" 
+            });
+
+            wrapper.updateProvider(newSettings);
+
+            // Test new provider validation
+            result = await wrapper.validateApiKey();
+            expect(mockOpenRouterProvider.validateApiKey).toHaveBeenCalledOnce();
+            expect(result.valid).toBe(false);
+            expect(result.error).toBe("Invalid API key");
+        });
     });
 });

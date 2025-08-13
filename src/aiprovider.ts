@@ -39,6 +39,10 @@ export class AIProviderWrapper {
         return this.provider.getStreamingResponse(prompt, onUpdate, signal);
     }
 
+    async validateApiKey(): Promise<{ valid: boolean; error?: string }> {
+        return this.provider.validateApiKey();
+    }
+
     // Method to recreate the provider when settings change
     updateProvider(newSettings: VaultBotPluginSettings): void {
         this.settings = newSettings;

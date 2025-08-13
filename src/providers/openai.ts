@@ -51,4 +51,25 @@ export class OpenAIProvider implements AIProvider {
             }
         }
     }
+
+    async validateApiKey(): Promise<{ valid: boolean; error?: string }> {
+        try {
+            // Make a simple API call to validate the key
+            await this.openai.models.list();
+            return { valid: true };
+        } catch (error: any) {
+            console.error('OpenAI API key validation failed:', error);
+            
+            // Check for specific error types
+            if (error.status === 401) {
+                return { valid: false, error: 'Invalid API key' };
+            } else if (error.status === 429) {
+                return { valid: false, error: 'Rate limit exceeded' };
+            } else if (error.status >= 500) {
+                return { valid: false, error: 'OpenAI service temporarily unavailable' };
+            } else {
+                return { valid: false, error: error.message || 'Unknown error occurred' };
+            }
+        }
+    }
 }

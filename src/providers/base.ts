@@ -1,5 +1,6 @@
 export interface AIProvider {
     getStreamingResponse(prompt: string, onUpdate: (text: string) => void, signal: AbortSignal): Promise<void>;
+    validateApiKey(): Promise<{ valid: boolean; error?: string }>;
 }
 
 export interface AIProviderSettings {

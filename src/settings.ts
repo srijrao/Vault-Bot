@@ -1,6 +1,7 @@
-import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type { OpenAIProviderSettings, OpenRouterProviderSettings } from './aiprovider';
 import type { AIProviderSettings } from './providers';
+import { AIProviderWrapper } from './aiprovider';
 
 export interface VaultBotPluginSettings {
 	apiProvider: string;
@@ -82,6 +83,14 @@ export class VaultBotSettingTab extends PluginSettingTab {
 						}
 					});
 				text.inputEl.type = 'password';
+			})
+			.addButton(button => {
+				button
+					.setButtonText('Test API Key')
+					.setTooltip('Test if the API key is valid')
+					.onClick(async () => {
+						await this.testApiKey();
+					});
 			});
 
 		new Setting(containerEl)
@@ -223,5 +232,31 @@ export class VaultBotSettingTab extends PluginSettingTab {
 					openrouterSettings.site_name = value;
 					this.debouncedSave();
 				}));
+	}
+
+	private async testApiKey(): Promise<void> {
+		const currentProvider = this.plugin.settings.apiProvider;
+		const currentSettings = this.plugin.settings.aiProviderSettings[currentProvider];
+		
+		if (!currentSettings?.api_key) {
+			new Notice('Please enter an API key first');
+			return;
+		}
+
+		new Notice('Testing API key...');
+		
+		try {
+			const providerWrapper = new AIProviderWrapper(this.plugin.settings);
+			const result = await providerWrapper.validateApiKey();
+			
+			if (result.valid) {
+				new Notice('✅ API key is valid!');
+			} else {
+				new Notice(`❌ API key validation failed: ${result.error}`);
+			}
+		} catch (error: any) {
+			console.error('Error testing API key:', error);
+			new Notice(`❌ Error testing API key: ${error.message}`);
+		}
 	}
 }

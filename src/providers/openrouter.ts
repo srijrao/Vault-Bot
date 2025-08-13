@@ -58,4 +58,34 @@ export class OpenRouterProvider implements AIProvider {
             throw new Error('Failed to get response from OpenRouter.');
         }
     }
+
+    async validateApiKey(): Promise<{ valid: boolean; error?: string }> {
+        try {
+            // Make a simple API call to validate the key
+            const response = await fetch('https://openrouter.ai/api/v1/models', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.settings.api_key}`,
+                    'HTTP-Referer': this.settings.site_url || 'https://obsidian.md',
+                    'X-Title': this.settings.site_name || 'Obsidian Vault-Bot'
+                }
+            });
+
+            if (response.ok) {
+                return { valid: true };
+            } else if (response.status === 401) {
+                return { valid: false, error: 'Invalid API key' };
+            } else if (response.status === 429) {
+                return { valid: false, error: 'Rate limit exceeded' };
+            } else if (response.status >= 500) {
+                return { valid: false, error: 'OpenRouter service temporarily unavailable' };
+            } else {
+                const errorText = await response.text();
+                return { valid: false, error: errorText || 'Unknown error occurred' };
+            }
+        } catch (error: any) {
+            console.error('OpenRouter API key validation failed:', error);
+            return { valid: false, error: error.message || 'Network error occurred' };
+        }
+    }
 }
