@@ -94,4 +94,28 @@ describe('recordChatCall', () => {
     // Clean up and restore
     (fs.promises as any).rename = orig;
   });
+
+  it('writes timestamp_iso and timestamp_local in YAML header', async () => {
+    const dir = resolveAiCallsDir();
+    const nowIso = new Date().toISOString();
+    const request = { provider: 'openai', model: 'x', messages: [{ role: 'user', content: 'a' }], options: null, timestamp: nowIso };
+    const response = { content: 'b', provider: 'openai', model: 'x', timestamp: nowIso, duration_ms: 1 };
+
+    const r = await recordChatCall({ dir, provider: 'openai', model: 'x', request, response });
+    if ('error' in r) throw new Error(r.error);
+    const text = await fs.promises.readFile(r.filePath, 'utf8');
+
+    // YAML header should contain timestamp_iso and timestamp_local
+    expect(text).toMatch(/timestamp_iso:\s*\d{4}-\d{2}-\d{2}T/);
+
+    // timestamp_local should look like: YYYY-MM-DD HH:MM:SS ±HH:MM
+    const localMatch = text.match(/timestamp_local:\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+[+-]\d{2}:\d{2})/);
+    expect(localMatch).toBeTruthy();
+    if (localMatch) {
+      // Quick sanity parse: new Date(local) may not parse the exact format in all envs,
+      // but ensure the components are present
+      const val = localMatch[1];
+      expect(val.length).toBeGreaterThan(19);
+    }
+  });
 });

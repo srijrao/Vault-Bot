@@ -57,6 +57,26 @@ function formatUtcStamp(d: Date): string {
   );
 }
 
+function formatLocalWithOffset(d: Date): string {
+  const pad = (n: number, w = 2) => n.toString().padStart(w, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const date = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+
+  // timezone offset in minutes (getTimezoneOffset returns minutes behind UTC, so invert sign)
+  const tzMin = -d.getTimezoneOffset();
+  const sign = tzMin >= 0 ? '+' : '-';
+  const tzAbsMin = Math.abs(tzMin);
+  const tzHour = pad(Math.floor(tzAbsMin / 60));
+  const tzMinute = pad(tzAbsMin % 60);
+
+  // e.g. 2025-08-19 13:58:57 +02:00
+  return `${year}-${month}-${date} ${hours}:${minutes}:${seconds} ${sign}${tzHour}:${tzMinute}`;
+}
+
 function chooseFence(...blocks: string[]): string {
   // Prefer backticks; increase count until collision-free; fallback to ~ if needed
   for (let ticks = 3; ticks <= 8; ticks++) {
@@ -119,10 +139,30 @@ export async function recordChatCall(params: {
     const start = new Date(request.timestamp);
     const utc = formatUtcStamp(start);
 
+    // Filename-safe local stamp: YYYYMMDD-HHMMSS±HHMM (no colon) for Windows-safe filenames
+    const formatLocalStampForFilename = (d: Date): string => {
+      const pad = (n: number, w = 2) => n.toString().padStart(w, '0');
+      const year = d.getFullYear();
+      const month = pad(d.getMonth() + 1);
+      const day = pad(d.getDate());
+      const hours = pad(d.getHours());
+      const minutes = pad(d.getMinutes());
+      const seconds = pad(d.getSeconds());
+      const tzMin = -d.getTimezoneOffset();
+      const sign = tzMin >= 0 ? '+' : '-';
+      const tzAbsMin = Math.abs(tzMin);
+      const tzHour = pad(Math.floor(tzAbsMin / 60));
+      const tzMinute = pad(tzAbsMin % 60);
+      return `${year}${month}${day}-${hours}${minutes}${seconds}${sign}${tzHour}${tzMinute}`;
+    };
+    const localForFile = formatLocalStampForFilename(start);
+
     const providerSafe = sanitizeForFilename(provider);
     const modelSafe = sanitizeForFilename(model);
     const uniq = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const baseName = `vault-bot-${utc}-${providerSafe}-${modelSafe}-${uniq}.txt`;
+  // Include both local (readable with offset) and UTC compact stamps in the filename
+  // e.g. vault-bot-local_20250819-135857+0200-utc_20250819-115857-openai-gpt-xxxx.txt
+  const baseName = `vault-bot-local_${localForFile}-utc_${utc}-${providerSafe}-${modelSafe}-${uniq}.txt`;
 
     const destPath = path.join(dir, baseName);
 
@@ -130,21 +170,26 @@ export async function recordChatCall(params: {
     const responseJson = JSON.stringify(response, null, 2);
     const fence = chooseFence(requestJson, responseJson);
 
-    let meta: RecordMeta = {
+    // Present a human-readable local timestamp (with UTC offset) in the YAML header
+    // while preserving the original ISO timestamp inside the JSON blocks.
+    let meta: RecordMeta & { timestamp_iso?: string } = {
       provider,
       model,
-      timestamp: request.timestamp,
+      timestamp: formatLocalWithOffset(start),
       duration_ms: response.duration_ms,
       truncated: response.truncated,
       redacted: params.redacted ?? false,
+      timestamp_iso: request.timestamp,
     };
     // Build once to compute size, then rebuild with size_bytes
-    const buildBody = (m: RecordMeta) => {
+    const buildBody = (m: RecordMeta & { timestamp_iso?: string }) => {
       let s = '';
       s += '---\n';
       s += `provider: ${m.provider}\n`;
       s += `model: ${m.model}\n`;
-      s += `timestamp: ${m.timestamp}\n`;
+  // local, human-readable timestamp with UTC offset for quick scanning
+  s += `timestamp_local: ${m.timestamp}\n`;
+  if ((m as any).timestamp_iso !== undefined) s += `timestamp_iso: ${(m as any).timestamp_iso}\n`;
       s += `duration_ms: ${m.duration_ms ?? ''}\n`;
       if (m.truncated !== undefined) s += `truncated: ${!!m.truncated}\n`;
       if (m.redacted !== undefined) s += `redacted: ${!!m.redacted}\n`;
