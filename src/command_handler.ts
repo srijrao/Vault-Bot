@@ -1,6 +1,8 @@
 import { Editor, MarkdownView, Notice } from 'obsidian';
 import { AIProviderWrapper } from './aiprovider';
 import VaultBotPlugin from '../main';
+import { recordChatCall, resolveAiCallsDir, type ChatRequestRecord, type ChatResponseRecord } from './recorder';
+import { redactMessages } from './redaction';
 
 export class CommandHandler {
     plugin: VaultBotPlugin;
@@ -81,6 +83,7 @@ export class CommandHandler {
             try {
                 const provider = new AIProviderWrapper(this.plugin.settings);
                 const initialContent = selection + this.plugin.settings.chatSeparator;
+                const requestStart = new Date();
                 
                 // Get the selection range before replacing
                 const selectionStart = editor.getCursor('from');
@@ -112,6 +115,52 @@ export class CommandHandler {
                 };
 
                 await provider.getStreamingResponse(selection, onUpdate, signal);
+
+                // After streaming completes, optionally record the call
+                if (this.plugin.settings.recordApiCalls) {
+                    try {
+                        // Narrow provider-specific fields safely
+                        const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
+                        const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
+                        const model = typeof cfgAny?.model === 'string' ? cfgAny.model : '';
+                        const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
+                        const temperature = typeof cfgAny?.temperature === 'number' ? cfgAny.temperature : null;
+
+                        const redaction = redactMessages([
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: selection },
+                        ]);
+
+                        const requestRecord: ChatRequestRecord = {
+                            provider: this.plugin.settings.apiProvider,
+                            model,
+                            messages: redaction.messages,
+                            options: { temperature },
+                            timestamp: requestStart.toISOString(),
+                        };
+
+                        const responseRecord: ChatResponseRecord = {
+                            content: responseBuffer || null,
+                            provider: this.plugin.settings.apiProvider,
+                            model,
+                            timestamp: new Date().toISOString(),
+                            duration_ms: Date.now() - requestStart.getTime(),
+                        };
+
+                        const dir = resolveAiCallsDir((this.plugin as any).app);
+                        await recordChatCall({
+                            dir,
+                            provider: requestRecord.provider,
+                            model: requestRecord.model,
+                            request: requestRecord,
+                            response: responseRecord,
+                            redacted: redaction.redacted,
+                        });
+                    } catch (recErr) {
+                        console.error('Recording AI call failed (non-fatal):', recErr);
+                        // Show a light notice only if it repeatedly fails would be ideal; keep it quiet here.
+                    }
+                }
 
             } catch (error) {
                 if (error.name !== 'AbortError') {

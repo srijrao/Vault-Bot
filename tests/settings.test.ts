@@ -40,6 +40,11 @@ vi.mock('obsidian', () => ({
             callback(mockDropdown);
             return setting;
         });
+        setting.addToggle = vi.fn((callback) => {
+            const toggle = { setValue: vi.fn().mockReturnThis(), onChange: vi.fn().mockReturnThis() };
+            callback(toggle);
+            return setting;
+        });
         setting.addButton = vi.fn((callback) => {
             callback(mockButton);
             return setting;
@@ -56,6 +61,7 @@ const mockSetting = {
     addTextArea: vi.fn().mockReturnThis(),
     addSlider: vi.fn().mockReturnThis(),
     addDropdown: vi.fn().mockReturnThis(),
+    addToggle: vi.fn().mockReturnThis(),
     addButton: vi.fn().mockReturnThis(),
 };
 
@@ -117,6 +123,11 @@ vi.mock('obsidian', () => ({
             callback(mockDropdown);
             return setting;
         });
+        setting.addToggle = vi.fn((callback) => {
+            const toggle = { setValue: vi.fn().mockReturnThis(), onChange: vi.fn().mockReturnThis() };
+            callback(toggle);
+            return setting;
+        });
         setting.addButton = vi.fn((callback) => {
             callback(mockButton);
             return setting;
@@ -147,9 +158,9 @@ describe('VaultBotSettingTab', () => {
         expect(mockContainerEl.empty).toHaveBeenCalled();
         expect(mockContainerEl.createEl).toHaveBeenCalledWith('h2', { text: 'OpenAI Provider Settings' });
         
-        // Should create 6 settings: Provider Dropdown, API Key, Chat Separator, Model, System Prompt, Temperature
+    // Should create 8 settings: Provider Dropdown, API Key, Record toggle, Folder actions, Chat Separator, Model, System Prompt, Temperature
         const { Setting } = await import('obsidian');
-        expect(Setting).toHaveBeenCalledTimes(6);
+    expect(Setting).toHaveBeenCalledTimes(8);
     });
 
     it('should set up API Key setting correctly', () => {

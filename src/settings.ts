@@ -1,4 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice } from 'obsidian';
+import { resolveAiCallsDir } from './recorder';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { OpenAIProviderSettings, OpenRouterProviderSettings } from './aiprovider';
 import type { AIProviderSettings } from './providers';
 import { AIProviderWrapper } from './aiprovider';
@@ -7,11 +10,13 @@ export interface VaultBotPluginSettings {
 	apiProvider: string;
 	chatSeparator: string;
 	aiProviderSettings: Record<string, AIProviderSettings>;
+	recordApiCalls: boolean;
 }
 
 export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
 	apiProvider: 'openai',
 	chatSeparator: '\n\n----\n\n',
+	recordApiCalls: true,
 	aiProviderSettings: {
 		openai: {
 			api_key: '',
@@ -33,6 +38,7 @@ export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
 export class VaultBotSettingTab extends PluginSettingTab {
 	plugin: Plugin & { settings: VaultBotPluginSettings, saveSettings: () => Promise<void> };
 	private saveTimeout: NodeJS.Timeout | null = null;
+	private lastRecordingError: string | null = null;
 
 	constructor(app: App, plugin: Plugin & { settings: VaultBotPluginSettings, saveSettings: () => Promise<void> }) {
 		super(app, plugin);
@@ -92,6 +98,52 @@ export class VaultBotSettingTab extends PluginSettingTab {
 						await this.testApiKey();
 					});
 			});
+
+		new Setting(containerEl)
+			.setName('Record chat AI calls')
+			.setDesc('May record sensitive chat content. Do not enable if you store private data you do not want on disk.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.recordApiCalls)
+				.onChange(async (value) => {
+					this.plugin.settings.recordApiCalls = value;
+					this.debouncedSave();
+				}))
+
+		new Setting(containerEl)
+			.setName('AI call records folder')
+			.setDesc(this.lastRecordingError ? `Recording errors detected: ${this.lastRecordingError}` : 'Open or clear recorded calls')
+			.addButton(btn => btn
+				.setButtonText('Open Folder')
+				.onClick(async () => {
+					try {
+						const dir = resolveAiCallsDir((this as any).app);
+						await fs.promises.mkdir(dir, { recursive: true });
+						// Obsidian API to open folder is not available here; just notify the path.
+						new Notice(`AI calls folder: ${dir}`);
+					} catch (e: any) {
+						this.lastRecordingError = e?.message || 'Open failed';
+						this.display();
+					}
+				}))
+			.addButton(btn => btn
+				.setButtonText('Clear Files')
+				.onClick(async () => {
+					try {
+						const dir = resolveAiCallsDir((this as any).app);
+						const entries = await fs.promises.readdir(dir).catch(() => [] as string[]);
+						let removed = 0;
+						for (const name of entries) {
+							if (name.endsWith('.txt') || name.includes('vault-bot-')) {
+								await fs.promises.unlink(path.join(dir, name)).catch(() => {});
+								removed++;
+							}
+						}
+						new Notice(`Removed ${removed} file(s).`);
+					} catch (e: any) {
+						this.lastRecordingError = e?.message || 'Clear failed';
+						this.display();
+					}
+				}))
 
 		new Setting(containerEl)
 			.setName('Chat Separator')

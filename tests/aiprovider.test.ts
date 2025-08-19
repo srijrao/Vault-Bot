@@ -45,6 +45,7 @@ describe("AIProviderWrapper", () => {
         const settings: VaultBotPluginSettings = {
             apiProvider: "openai",
             chatSeparator: "---",
+            recordApiCalls: true,
             aiProviderSettings: {
                 openai: {
                     api_key: "test-key",
@@ -71,6 +72,7 @@ describe("AIProviderWrapper", () => {
         const settings: VaultBotPluginSettings = {
             apiProvider: "openrouter",
             chatSeparator: "---",
+            recordApiCalls: true,
             aiProviderSettings: {
                 openrouter: {
                     api_key: "test-key",
@@ -101,6 +103,7 @@ describe("AIProviderWrapper", () => {
         const settings: VaultBotPluginSettings = {
             apiProvider: "unsupported",
             chatSeparator: "---",
+            recordApiCalls: true,
             aiProviderSettings: {},
         };
 
@@ -113,6 +116,7 @@ describe("AIProviderWrapper", () => {
         const settings: VaultBotPluginSettings = {
             apiProvider: "openai",
             chatSeparator: "---",
+            recordApiCalls: true,
             aiProviderSettings: {
                 openai: {
                     api_key: "test-key",
@@ -144,6 +148,7 @@ describe("AIProviderWrapper", () => {
         const initialSettings: VaultBotPluginSettings = {
             apiProvider: "openai",
             chatSeparator: "---",
+            recordApiCalls: true,
             aiProviderSettings: {
                 openai: {
                     api_key: "test-key",
@@ -162,6 +167,7 @@ describe("AIProviderWrapper", () => {
         const newSettings: VaultBotPluginSettings = {
             apiProvider: "openrouter",
             chatSeparator: "---",
+            recordApiCalls: true,
             aiProviderSettings: {
                 openrouter: {
                     api_key: "new-key",
@@ -191,6 +197,7 @@ describe("AIProviderWrapper", () => {
         const initialSettings: VaultBotPluginSettings = {
             apiProvider: "openai",
             chatSeparator: "---",
+            recordApiCalls: true,
             aiProviderSettings: {
                 openai: {
                     api_key: "test-key",
@@ -217,6 +224,7 @@ describe("AIProviderWrapper", () => {
         const newSettings: VaultBotPluginSettings = {
             apiProvider: "openrouter",
             chatSeparator: "---",
+            recordApiCalls: true,
             aiProviderSettings: {
                 openrouter: {
                     api_key: "test-key",
@@ -245,6 +253,7 @@ describe("AIProviderWrapper", () => {
             const settings: VaultBotPluginSettings = {
                 apiProvider: "openai",
                 chatSeparator: "---",
+                recordApiCalls: true,
                 aiProviderSettings: {
                     openai: {
                         api_key: "test-key",
@@ -268,6 +277,7 @@ describe("AIProviderWrapper", () => {
             const settings: VaultBotPluginSettings = {
                 apiProvider: "openrouter",
                 chatSeparator: "---",
+                recordApiCalls: true,
                 aiProviderSettings: {
                     openrouter: {
                         api_key: "test-key",
@@ -297,6 +307,7 @@ describe("AIProviderWrapper", () => {
             const initialSettings: VaultBotPluginSettings = {
                 apiProvider: "openai",
                 chatSeparator: "---",
+                recordApiCalls: true,
                 aiProviderSettings: {
                     openai: {
                         api_key: "test-key",
@@ -320,6 +331,7 @@ describe("AIProviderWrapper", () => {
             const newSettings: VaultBotPluginSettings = {
                 apiProvider: "openrouter",
                 chatSeparator: "---",
+                recordApiCalls: true,
                 aiProviderSettings: {
                     openrouter: {
                         api_key: "test-key",

@@ -1,0 +1,140 @@
+# Chat AI Call Recording
+
+*Date: 2025-08-13*
+
+## Overview
+
+This plugin provides an option to record chat-style AI calls (APIs using messages with roles like `system`, `user`, and `assistant`) to disk for debugging and auditing. The feature is enabled by default but can be disabled in plugin settings.
+
+## Setting: Record Chat AI Calls
+
+- **Key:** `recordApiCalls`
+- **Type:** boolean
+- **Default:** `true`
+- **Label:** "Record chat AI calls"
+- **Location:** Vault-Bot plugin settings
+
+When enabled, each chat request/response pair is saved as a plain text `.txt` file under `/.obsidian/plugins/Vault-Bot/ai-calls/`.
+
+## File Naming
+
+Files use a pattern to ensure order and avoid collisions:
+
+`vault-bot-YYYYMMDD-HHMMSS-<provider>-<model>-<uniq>.txt`
+
+- `YYYYMMDD-HHMMSS`: UTC ISO-8601 timestamp when the call started
+- `<provider>`: short provider ID (e.g., `openai`)
+- `<model>`: short model ID (e.g., `gpt-4o-mini`)
+- `<uniq>`: a unique suffix (milliseconds + short UUID) to avoid collisions
+
+Example:
+
+`vault-bot-20250813-164502-openai-gpt-4o-mini-12345abc.txt`
+
+Notes:
+- Sanitize provider/model identifiers and limit filename length for Windows compatibility.
+- Use UTF-8 and LF newlines. Normalize filenames to avoid forbidden characters on Windows.
+
+## File Format
+
+Each recorded file contains three top-level sections in this order:
+
+1. YAML metadata header (machine-parsable)
+2. `## Request` with a fenced JSON block
+3. `## Response` with a fenced JSON block
+
+Example layout:
+
+---
+provider: openai
+model: openai:gpt-4.1
+timestamp: 2025-08-12T16:54:25.007Z
+duration_ms: 3942
+redacted: true
+size_bytes: 1234
+---
+
+# AI Call
+
+## Request
+
+```json
+{
+  "provider": "openai",
+  "model": "openai:gpt-4.1",
+  "messages": [
+    {"role": "system", "content": "...system prompt text..."},
+    {"role": "user", "content": "What is the capital of France?"}
+  ],
+  "options": {"temperature": 0},
+  "timestamp": "2025-08-12T16:54:25.007Z"
+}
+```
+
+## Response
+
+```json
+{
+  "content": "The capital of France is Paris.",
+  "provider": "openai",
+  "model": "openai:gpt-4.1",
+  "timestamp": "2025-08-12T16:54:28.949Z",
+  "duration": 3942
+}
+```
+
+### Required fields (when available)
+
+Request JSON should include at minimum:
+- `provider` (string)
+- `model` (string)
+- `messages` (array of `{ role, content }` objects, redacted/truncated as needed)
+- `options` (object|null)
+- `timestamp` (ISO 8601)
+
+Response JSON should include at minimum:
+- `content` (string|null): assembled assistant output
+- `provider` (string)
+- `model` (string)
+- `timestamp` (ISO 8601)
+- `duration` or `duration_ms` (number|null)
+
+## Implementation Notes (summary)
+
+- Preserve message order and roles so conversations can be replayed.
+- Write to a temporary file in the same directory, fsync the file (where available), then atomically rename to the final filename. On failure, fall back to a `.partial` name and retry with backoff.
+- Run file writes off the UI thread with try/catch. Failures must be logged and must not crash the plugin.
+- Dynamically choose a safe fence delimiter for JSON blocks if message content contains backticks (e.g., increase backtick count or use a UUID separator). Tests must JSON.parse both blocks.
+- Enforce UTF-8 encoding and LF normalization.
+- Only record the final assembled text for streaming responses.
+- Sanitize and limit filename length for Windows; avoid forbidden characters.
+- Provide a small YAML metadata header with searchable fields: `provider`, `model`, `timestamp`, `duration_ms`, `truncated`, `redacted`, `size_bytes`, etc.
+- Handle OneDrive/sync conflicts and file locks gracefully: retry, log non-fatal errors, and surface a UI notice if recording repeatedly fails.
+- Tests should cover concurrency, collisions, JSON validity, redaction, and rename/write failures (including networked drives).
+
+## Redaction & Privacy
+
+- The settings UI must show a clear warning: "May record sensitive chat content. Do not enable if you store private data you do not want on disk." Provide a one-time informational notice on upgrade describing the privacy implications and how to opt out.
+- Preserve existing `recordApiCalls` user setting on upgrade; do not override it.
+- Provide a manual "Clear recorded calls" action and an optional automatic deletion setting. Do not delete existing files automatically when a user opts out unless explicitly requested.
+
+## Migration
+
+- On upgrade, attempt to move records from previous plugin locations into `/.obsidian/plugins/Vault-Bot/ai-calls/` and log migration attempts. Failures should be non-fatal and logged.
+
+## UI & UX
+
+- Provide UI to view, export, archive, and delete records with clear consent and privacy warnings.
+- Show an indicator in settings if recording repeatedly fails and provide action to retry or disable recording.
+
+## Troubleshooting
+
+- If files are missing: check write permissions for `/.obsidian/plugins/Vault-Bot/` and OneDrive sync.
+- If files contain unexpected data: verify redaction rules and run the provider-focused tests in `tests/providers/`.
+
+## Testing requirements (high level)
+
+- Unit tests verifying the recorded file contains the YAML header, `## Request`, and `## Response` sections in order, and that both JSON blocks parse as JSON.
+- Tests asserting no secrets appear in recorded JSON blocks after redaction.
+- Tests for concurrent writes, unique temp names, atomic rename behavior, and OneDrive/file-lock scenarios.
+- Integration tests that simulate sync/backing-store failures and assert plugin does not crash.
