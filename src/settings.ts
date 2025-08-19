@@ -2,6 +2,7 @@ import { App, Plugin, PluginSettingTab, Setting, Notice } from 'obsidian';
 import { resolveAiCallsDir } from './recorder';
 import * as fs from 'fs';
 import * as path from 'path';
+import { exec, spawn } from 'child_process';
 import type { OpenAIProviderSettings, OpenRouterProviderSettings } from './aiprovider';
 import type { AIProviderSettings } from './providers';
 import { AIProviderWrapper } from './aiprovider';
@@ -118,8 +119,9 @@ export class VaultBotSettingTab extends PluginSettingTab {
 					try {
 						const dir = resolveAiCallsDir((this as any).app);
 						await fs.promises.mkdir(dir, { recursive: true });
-						// Obsidian API to open folder is not available here; just notify the path.
-						new Notice(`AI calls folder: ${dir}`);
+						// Use robust openFolder which tries Electron, Obsidian API, then OS shell
+						await this.openFolder(dir);
+						new Notice(`Opened AI calls folder: ${dir}`);
 					} catch (e: any) {
 						this.lastRecordingError = e?.message || 'Open failed';
 						this.display();
@@ -162,6 +164,83 @@ export class VaultBotSettingTab extends PluginSettingTab {
 		} else if (this.plugin.settings.apiProvider === 'openrouter') {
 			this.displayOpenRouterSettings(containerEl);
 		}
+	}
+
+	/**
+	 * Open a folder in the user's OS file explorer in a cross-platform way.
+	 */
+	private openFolder(dir: string): Promise<void> {
+		return (async () => {
+			const target = path.resolve(dir);
+
+			// On Windows, avoid Obsidian's openWithDefaultApp to prevent duplicated path bug
+			if (process.platform !== 'win32') {
+				try {
+					const anyApp = (this.app as any);
+					if (typeof anyApp.openWithDefaultApp === 'function') {
+						await anyApp.openWithDefaultApp(target);
+						return;
+					}
+				} catch {}
+			}
+
+			// Try Electron shell
+			try {
+				const electron = (window as any)?.require?.('electron');
+				if (electron?.shell) {
+					// If there is a file in the folder, show it in the folder view (often more reliable on Windows)
+					try {
+						const files = await fs.promises.readdir(target);
+						const first = files?.[0];
+						if (first && typeof electron.shell.showItemInFolder === 'function') {
+							electron.shell.showItemInFolder(path.join(target, first));
+							return;
+						}
+					} catch {}
+					if (typeof electron.shell.openPath === 'function') {
+						const errMsg: string = await electron.shell.openPath(target);
+						if (!errMsg) return; // success when empty string
+					}
+				}
+			} catch {}
+
+			// OS-specific fallback using spawn to avoid shell quoting issues
+			await new Promise<void>(async (resolve, reject) => {
+				let child;
+				if (process.platform === 'win32') {
+					// Prefer selecting an item to avoid odd parsing; if empty, open folder
+					let args: string[] = [];
+					try {
+						const files = await fs.promises.readdir(target);
+						if (files && files.length > 0) {
+							args = ['/select,', path.join(target, files[0])];
+						} else {
+							args = [target];
+						}
+					} catch {
+						args = [target];
+					}
+					child = spawn('explorer.exe', args, { shell: false });
+				} else if (process.platform === 'darwin') {
+					child = spawn('open', [target], { shell: false });
+				} else {
+					child = spawn('xdg-open', [target], { shell: false });
+				}
+				child.on('error', (err) => reject(err));
+				child.on('close', (code) => {
+					if (code === 0 || code === null) return resolve();
+					if (process.platform === 'win32') {
+						// Last-chance: open parent in Explorer
+						const parent = path.dirname(target);
+						const p = spawn('explorer.exe', [parent], { shell: false });
+						p.on('error', (e2) => reject(e2));
+						p.on('close', (code2) => code2 === 0 ? resolve() : reject(new Error('Failed to open folder')));
+						return;
+					}
+					reject(new Error('Failed to open folder'));
+				});
+			});
+		})()
 	}
 
 	private displayOpenAISettings(containerEl: HTMLElement): void {
