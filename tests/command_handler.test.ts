@@ -37,6 +37,7 @@ describe('CommandHandler', () => {
             getSelection: vi.fn(),
             replaceSelection: vi.fn(),
             getCursor: vi.fn(),
+            getLine: vi.fn(),
             replaceRange: vi.fn(),
             setCursor: vi.fn(),
         };
@@ -152,6 +153,43 @@ describe('CommandHandler', () => {
 
         expect(mockNotice).toHaveBeenCalledWith('Error getting response from AI.');
         expect(commandHandler.abortController).toBe(null);
+    });
+
+    it('should detect separator-mode and insert response above a multi-line separator', async () => {
+        // Configure a multi-line separator in settings
+        plugin.settings.chatSeparator = '\n==sep==\n==sep==\n';
+        commandHandler.onSettingsChanged();
+
+        // Arrange editor lines: separator occupies lines 2..3, query on line 4
+        // We'll mock getLine to return appropriate lines
+        const lines = [
+            'line0',
+            'line1',
+            '\n==sep==', // start of separator join
+            '==sep==',   // end of separator join
+            'my query',
+        ];
+
+        mockEditor.getSelection.mockReturnValue(''); // no selection
+        mockEditor.getCursor.mockImplementation(() => ({ line: 4, ch: 0 }));
+        mockEditor.getLine.mockImplementation((i: number) => lines[i] ?? '');
+
+        mockGetStreamingResponse.mockImplementation(async (prompt: any, onUpdate: any) => {
+            // Simulate a streaming response
+            onUpdate('answer part');
+        });
+
+        await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
+
+        // Expect that replaceRange was called to insert the response above the separator block
+        expect(mockEditor.replaceRange).toHaveBeenCalled();
+        const callArgs = mockEditor.replaceRange.mock.calls[0];
+        const insertedText = callArgs[0];
+        const startPos = callArgs[1];
+        // Should have inserted the streamed response + newline
+        expect(insertedText).toBe('answer part\n');
+        // Start position should point at the start of the separator block (line 2)
+        expect(startPos).toEqual({ line: 2, ch: 0 });
     });
 
     describe('Different Chat Separators', () => {

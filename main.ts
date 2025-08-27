@@ -21,6 +21,16 @@ export default class VaultBotPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: 'get-response-above',
+			name: 'Get Response (Insert Above)',
+			editorCallback: (editor, view) => {
+				if (view instanceof MarkdownView) {
+					this.commandHandler.handleGetResponseAbove(editor, view);
+				}
+			}
+		});
+
+		this.addCommand({
 			id: 'stop-response',
 			name: 'Stop Response',
 			checkCallback: (checking) => this.commandHandler.handleStopResponse(checking)
