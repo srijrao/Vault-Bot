@@ -4,6 +4,8 @@ import VaultBotPlugin from '../main';
 import { recordChatCall, resolveAiCallsDir, type ChatRequestRecord, type ChatResponseRecord } from './recorder';
 import { redactMessages } from './redaction';
 
+type Direction = 'above' | 'below';
+
 export class CommandHandler {
     plugin: VaultBotPlugin;
     abortController: AbortController | null = null;
@@ -128,127 +130,143 @@ export class CommandHandler {
         }
     }
 
-    async handleGetResponseBelow(editor: Editor, view: MarkdownView) {
-        const selection = editor.getSelection();
-        
-        // Handle conversation mode when nothing is selected
-        if (!selection) {
-            if (this.abortController) {
-                new Notice('A response is already in progress. Please stop it first.');
+    // Shared conversation-mode handler for both Above and Below commands using line boundaries
+    private async handleDirectionalConversation(editor: Editor, direction: Direction): Promise<void> {
+        if (this.abortController) {
+            new Notice('A response is already in progress. Please stop it first.');
+            return;
+        }
+        this.abortController = new AbortController();
+        const signal = this.abortController.signal;
+
+        try {
+            const provider = new AIProviderWrapper(this.plugin.settings);
+            const requestStart = new Date();
+
+            const cursor = editor.getCursor();
+            const currentLineStartPos = { line: cursor.line, ch: 0 };
+            const currentLineEndPos = { line: cursor.line, ch: editor.getLine(cursor.line).length };
+
+            // Direction-specific slice for conversation parsing (line-based)
+            const sliceStart = direction === 'below' ? { line: 0, ch: 0 } : currentLineStartPos;
+            const sliceEnd = direction === 'below' ? currentLineEndPos : { line: editor.lastLine(), ch: editor.getLine(editor.lastLine()).length };
+            const textSlice = editor.getRange(sliceStart, sliceEnd);
+
+            const reverseOrder = direction === 'above';
+            const { conversation, lastUserMessage } = this.parseConversationFromText(textSlice, reverseOrder);
+            const queryText = conversation.length > 0 ? lastUserMessage : textSlice.trim();
+
+            if (!queryText) {
+                const msg = direction === 'below'
+                    ? 'No text found above cursor to create a response.'
+                    : 'No text found below cursor to create a response.';
+                new Notice(msg);
+                this.abortController = null;
                 return;
             }
-            this.abortController = new AbortController();
-            const signal = this.abortController.signal;
 
-            try {
-                const provider = new AIProviderWrapper(this.plugin.settings);
-                const requestStart = new Date();
-                
-                // Get cursor position
-                const cursor = editor.getCursor();
-                
-                // Get all text from start of document to end of current line (line-based conversation mode)
-                const currentLineEndPos = { line: cursor.line, ch: editor.getLine(cursor.line).length };
-                const textAboveCursor = editor.getRange({ line: 0, ch: 0 }, currentLineEndPos);
-                
-                // Parse conversation from text above cursor
-                const { conversation, lastUserMessage } = this.parseConversationFromText(textAboveCursor);
-                
-                // If no conversation found, treat all text as user prompt
-                const queryText = conversation.length > 0 ? lastUserMessage : textAboveCursor.trim();
-                
-                if (!queryText) {
-                    new Notice('No text found above cursor to create a response.');
-                    this.abortController = null;
-                    return;
-                }
-                
-                // Insert separator at end of current line
+            // Compute insertion positions at line boundaries based on direction
+            let responseStartPos: { line: number; ch: number };
+            if (direction === 'below') {
+                // Insert separator at end of current line; response streams after it
                 const insertionPos = currentLineEndPos;
                 const separatorWithNewline = this.plugin.settings.chatSeparator + '\n';
                 editor.replaceRange(separatorWithNewline, insertionPos, insertionPos);
-                
-                // Calculate where the response should start (after separator)
-                const responseStartPos = this.calculateResponseStartPosition(insertionPos, separatorWithNewline);
-                
-                // Buffer for accumulating the response
-                let responseBuffer = "";
-                let lastUpdatePos = responseStartPos;
-                
-                const onUpdate = (text: string) => {
-                    if (!text) return; // Skip empty chunks
-                    
-                    responseBuffer += text;
-                    
-                    // Clear previous response and insert updated buffer
-                    editor.replaceRange(responseBuffer, lastUpdatePos, editor.getCursor());
-                    
-                    // Update cursor position to end of inserted content
-                    const newCursor = this.calculateEndPosition(responseStartPos, responseBuffer);
-                    editor.setCursor(newCursor);
-                    lastUpdatePos = responseStartPos; // Reset for next update
-                };
-
-                // Use conversation context if available, otherwise use simple prompt
-                if (conversation.length > 0) {
-                    const conversationMessages = this.buildConversationMessages(conversation);
-                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal);
-                } else {
-                    await provider.getStreamingResponse(queryText, onUpdate, signal);
-                }
-
-                // After streaming completes, optionally record the call
-                if (this.plugin.settings.recordApiCalls) {
-                    try {
-                        const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
-                        const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
-                        const model = typeof cfgAny?.model === 'string' ? cfgAny.model : '';
-                        const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
-                        const temperature = typeof cfgAny?.temperature === 'number' ? cfgAny.temperature : null;
-
-                        const redaction = redactMessages([
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: queryText },
-                        ]);
-
-                        const requestRecord: ChatRequestRecord = {
-                            provider: this.plugin.settings.apiProvider,
-                            model,
-                            messages: redaction.messages,
-                            options: { temperature },
-                            timestamp: requestStart.toISOString(),
-                        };
-
-                        const responseRecord: ChatResponseRecord = {
-                            content: responseBuffer || null,
-                            provider: this.plugin.settings.apiProvider,
-                            model,
-                            timestamp: new Date().toISOString(),
-                            duration_ms: Date.now() - requestStart.getTime(),
-                        };
-
-                        const dir = resolveAiCallsDir((this.plugin as any).app);
-                        await recordChatCall({
-                            dir,
-                            provider: requestRecord.provider,
-                            model: requestRecord.model,
-                            request: requestRecord,
-                            response: responseRecord,
-                            redacted: redaction.redacted,
-                        });
-                    } catch (recErr) {
-                        console.error('Recording AI call failed (non-fatal):', recErr);
-                    }
-                }
-
-            } catch (error) {
-                if (error.name !== 'AbortError') {
-                    new Notice('Error getting response from AI.');
-                    console.error(error);
-                }
-            } finally {
-                this.abortController = null;
+                responseStartPos = this.calculateResponseStartPosition(insertionPos, separatorWithNewline);
+            } else {
+                // Insert separator block that will follow the response, then stream response at start of current line
+                const insertionPos = currentLineStartPos;
+                const separatorWithNewline = '\n' + this.plugin.settings.chatSeparator + '\n';
+                editor.replaceRange(separatorWithNewline, insertionPos, insertionPos);
+                responseStartPos = insertionPos;
             }
+
+            // Buffer for accumulating the response
+            let responseBuffer = '';
+            let lastInsertedEnd = responseStartPos; // Track the end of the previously inserted response
+
+            const onUpdate = (text: string) => {
+                if (!text) return; // Skip empty chunks
+
+                responseBuffer += text;
+
+                // Replace only the previously inserted response region with the new buffer
+                editor.replaceRange(responseBuffer, responseStartPos, lastInsertedEnd);
+
+                // Update cursor position to end of inserted content
+                const newCursor = this.calculateEndPosition(responseStartPos, responseBuffer);
+                editor.setCursor(newCursor);
+                lastInsertedEnd = newCursor; // Advance the region end
+            };
+
+            // Use conversation context if available, otherwise use simple prompt
+            if (conversation.length > 0) {
+                const conversationMessages = this.buildConversationMessages(conversation);
+                await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal);
+            } else {
+                await provider.getStreamingResponse(queryText, onUpdate, signal);
+            }
+
+            // After streaming completes, optionally record the call
+            if (this.plugin.settings.recordApiCalls) {
+                try {
+                    const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
+                    const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
+                    const model = typeof cfgAny?.model === 'string' ? cfgAny.model : '';
+                    const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
+                    const temperature = typeof cfgAny?.temperature === 'number' ? cfgAny.temperature : null;
+
+                    const redaction = redactMessages([
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: queryText },
+                    ]);
+
+                    const requestRecord: ChatRequestRecord = {
+                        provider: this.plugin.settings.apiProvider,
+                        model,
+                        messages: redaction.messages,
+                        options: { temperature },
+                        timestamp: requestStart.toISOString(),
+                    };
+
+                    const responseRecord: ChatResponseRecord = {
+                        content: responseBuffer || null,
+                        provider: this.plugin.settings.apiProvider,
+                        model,
+                        timestamp: new Date().toISOString(),
+                        duration_ms: Date.now() - requestStart.getTime(),
+                    };
+
+                    const dir = resolveAiCallsDir((this.plugin as any).app);
+                    await recordChatCall({
+                        dir,
+                        provider: requestRecord.provider,
+                        model: requestRecord.model,
+                        request: requestRecord,
+                        response: responseRecord,
+                        redacted: redaction.redacted,
+                    });
+                } catch (recErr) {
+                    console.error('Recording AI call failed (non-fatal):', recErr);
+                }
+            }
+
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                new Notice('Error getting response from AI.');
+                console.error(error);
+            }
+        } finally {
+            this.abortController = null;
+        }
+    }
+
+    async handleGetResponseBelow(editor: Editor, view: MarkdownView) {
+        const selection = editor.getSelection();
+
+        // Handle conversation mode when nothing is selected
+        if (!selection) {
+            await this.handleDirectionalConversation(editor, 'below');
             return;
         }
 
@@ -425,23 +443,8 @@ export class CommandHandler {
 
             // If separator-mode not detected, try conversation mode
             if (!separatorMode) {
-                // Get all text from start of current line to end of document (line-based conversation mode)
-                const currentLineStartPos = { line: cursor.line, ch: 0 };
-                const textBelowCursor = editor.getRange(currentLineStartPos, { line: editor.lastLine(), ch: editor.getLine(editor.lastLine()).length });
-                
-                // Parse conversation from text below cursor (reverse order since newest is at top)
-                const { conversation, lastUserMessage } = this.parseConversationFromText(textBelowCursor, true);
-                
-                // If no conversation found, treat all text as user prompt
-                queryText = conversation.length > 0 ? lastUserMessage : textBelowCursor.trim();
-                
-                if (!queryText) {
-                    new Notice('No text found below cursor to create a response.');
-                    return;
-                }
-                
-                // Set up for conversation mode response above cursor
-                separatorMode = false; // We'll handle this differently
+                await this.handleDirectionalConversation(editor, 'above');
+                return;
             }
         }
 
