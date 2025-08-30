@@ -147,8 +147,9 @@ export class CommandHandler {
                 // Get cursor position
                 const cursor = editor.getCursor();
                 
-                // Get all text from start of document to cursor
-                const textAboveCursor = editor.getRange({ line: 0, ch: 0 }, cursor);
+                // Get all text from start of document to end of current line (line-based conversation mode)
+                const currentLineEndPos = { line: cursor.line, ch: editor.getLine(cursor.line).length };
+                const textAboveCursor = editor.getRange({ line: 0, ch: 0 }, currentLineEndPos);
                 
                 // Parse conversation from text above cursor
                 const { conversation, lastUserMessage } = this.parseConversationFromText(textAboveCursor);
@@ -162,12 +163,13 @@ export class CommandHandler {
                     return;
                 }
                 
-                // Insert separator at cursor position
+                // Insert separator at end of current line
+                const insertionPos = currentLineEndPos;
                 const separatorWithNewline = this.plugin.settings.chatSeparator + '\n';
-                editor.replaceRange(separatorWithNewline, cursor, cursor);
+                editor.replaceRange(separatorWithNewline, insertionPos, insertionPos);
                 
                 // Calculate where the response should start (after separator)
-                const responseStartPos = this.calculateResponseStartPosition(cursor, separatorWithNewline);
+                const responseStartPos = this.calculateResponseStartPosition(insertionPos, separatorWithNewline);
                 
                 // Buffer for accumulating the response
                 let responseBuffer = "";
@@ -423,8 +425,9 @@ export class CommandHandler {
 
             // If separator-mode not detected, try conversation mode
             if (!separatorMode) {
-                // Get all text from cursor to end of document
-                const textBelowCursor = editor.getRange(cursor, { line: editor.lastLine(), ch: editor.getLine(editor.lastLine()).length });
+                // Get all text from start of current line to end of document (line-based conversation mode)
+                const currentLineStartPos = { line: cursor.line, ch: 0 };
+                const textBelowCursor = editor.getRange(currentLineStartPos, { line: editor.lastLine(), ch: editor.getLine(editor.lastLine()).length });
                 
                 // Parse conversation from text below cursor (reverse order since newest is at top)
                 const { conversation, lastUserMessage } = this.parseConversationFromText(textBelowCursor, true);
@@ -478,13 +481,14 @@ export class CommandHandler {
 
                 // Handle text replacement based on mode
                 if (conversationMode) {
-                    // Conversation mode: insert separator first at cursor position, then stream response above it
+                    // Conversation mode: insert separator first at start of current line, then stream response above it
                     const cursor = editor.getCursor();
+                    const currentLineStartPos = { line: cursor.line, ch: 0 };
                     const separatorWithNewline = '\n' + this.plugin.settings.chatSeparator + '\n';
-                    editor.replaceRange(separatorWithNewline, cursor, cursor);
+                    editor.replaceRange(separatorWithNewline, currentLineStartPos, currentLineStartPos);
                     
-                    // Calculate where the response should start (above the separator we just inserted)
-                    responseStartPos = cursor; // Response goes at the original cursor position
+                    // Calculate where the response should start (at the original line start position)
+                    responseStartPos = currentLineStartPos; // Response goes at the start of the current line
                 } else if (!separatorMode) {
                     // Selection mode: replace selection with query + separator
                     editor.replaceSelection(initialContent);

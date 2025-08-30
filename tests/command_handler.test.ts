@@ -67,6 +67,7 @@ describe('CommandHandler', () => {
         mockEditor.getSelection.mockReturnValue('');
         mockEditor.getCursor.mockReturnValue({ line: 0, ch: 0 });
         mockEditor.getRange.mockReturnValue(''); // No text above cursor
+        mockEditor.getLine.mockReturnValue(''); // No text on current line
         
         await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
         
@@ -354,6 +355,39 @@ describe('CommandHandler', () => {
         });
     });
 
+    describe('Conversation Mode for Get Response Below', () => {
+        it('should use line-based conversation parsing for Get Response Below', async () => {
+            const conversationText = 'Previous conversation\n\n----\n\nUser message on current line';
+            const cursorPos = { line: 4, ch: 10 }; // Cursor in middle of line 4
+            const currentLineText = 'User message on current line';
+            const lineEndPos = { line: 4, ch: currentLineText.length }; // End of line 4
+            
+            mockEditor.getSelection.mockReturnValue('');
+            mockEditor.getCursor.mockReturnValue(cursorPos);
+            mockEditor.getLine.mockReturnValue(currentLineText);
+            mockEditor.getRange.mockReturnValue(conversationText);
+            
+            mockGetStreamingResponseWithConversation.mockImplementation(async (messages: any, onUpdate: any) => {
+                onUpdate('AI response');
+            });
+
+            await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
+
+            // Verify getRange was called from start of document to end of current line
+            expect(mockEditor.getRange).toHaveBeenCalledWith(
+                { line: 0, ch: 0 }, // From start of document
+                lineEndPos // To end of current line
+            );
+
+            // Verify separator was inserted at end of current line
+            expect(mockEditor.replaceRange).toHaveBeenCalledWith(
+                '\n\n----\n\n\n',
+                lineEndPos,
+                lineEndPos
+            );
+        });
+    });
+
     describe('Conversation Mode for Get Response Above', () => {
         it('should handle conversation mode with reverse chronological order', async () => {
             // Simulate text below cursor in reverse chronological order (newest at top)
@@ -419,13 +453,14 @@ describe('CommandHandler', () => {
 
         it('should not replace user message when inserting AI response in conversation mode', async () => {
             const userText = 'User question below cursor';
-            const cursorPos = { line: 2, ch: 0 };
+            const cursorPos = { line: 2, ch: 5 }; // Cursor in middle of line 2
+            const lineStartPos = { line: 2, ch: 0 }; // Start of line 2
             
             mockEditor.getSelection.mockReturnValue('');
             mockEditor.getCursor.mockReturnValue(cursorPos);
             mockEditor.getRange.mockReturnValue(userText);
             mockEditor.lastLine.mockReturnValue(3);
-            mockEditor.getLine.mockReturnValue('');
+            mockEditor.getLine.mockReturnValue('User question below cursor');
             
             mockGetStreamingResponse.mockImplementation(async (prompt: any, onUpdate: any) => {
                 onUpdate('AI response chunk 1');
@@ -434,19 +469,44 @@ describe('CommandHandler', () => {
 
             await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
 
-            // Verify separator was inserted first
+            // Verify separator was inserted at start of current line (line-based)
             expect(mockEditor.replaceRange).toHaveBeenCalledWith(
                 '\n\n\n----\n\n\n',
-                cursorPos,
-                cursorPos
+                lineStartPos,
+                lineStartPos
             );
 
-            // Verify AI response was inserted at cursor position (not replacing user text)
-            // The first update should replace from cursor to cursor (insert mode)
+            // Verify AI response was inserted at line start position (not replacing user text)
+            // The first update should replace from line start to line start (insert mode)
             expect(mockEditor.replaceRange).toHaveBeenCalledWith(
                 'AI response chunk 1',
-                cursorPos,
-                cursorPos
+                lineStartPos,
+                lineStartPos
+            );
+        });
+
+        it('should use line-based conversation parsing for Get Response Above', async () => {
+            const conversationText = 'User message on current line\n\n----\n\nPrevious AI response';
+            const cursorPos = { line: 0, ch: 10 }; // Cursor in middle of first line
+            const lineStartPos = { line: 0, ch: 0 }; // Start of first line
+            const currentLineText = 'User message on current line';
+            
+            mockEditor.getSelection.mockReturnValue('');
+            mockEditor.getCursor.mockReturnValue(cursorPos);
+            mockEditor.getRange.mockReturnValue(conversationText); // This should be called with line start, not cursor
+            mockEditor.lastLine.mockReturnValue(4);
+            mockEditor.getLine.mockReturnValue(currentLineText);
+            
+            mockGetStreamingResponseWithConversation.mockImplementation(async (messages: any, onUpdate: any) => {
+                onUpdate('New AI response');
+            });
+
+            await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
+
+            // Verify getRange was called from start of current line to end of document
+            expect(mockEditor.getRange).toHaveBeenCalledWith(
+                lineStartPos, // Should start from beginning of current line
+                { line: 4, ch: currentLineText.length } // To end of document
             );
         });
     });
