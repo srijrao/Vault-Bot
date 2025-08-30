@@ -416,6 +416,39 @@ describe('CommandHandler', () => {
             
             expect(mockNotice).toHaveBeenCalledWith('No text found below cursor to create a response.');
         });
+
+        it('should not replace user message when inserting AI response in conversation mode', async () => {
+            const userText = 'User question below cursor';
+            const cursorPos = { line: 2, ch: 0 };
+            
+            mockEditor.getSelection.mockReturnValue('');
+            mockEditor.getCursor.mockReturnValue(cursorPos);
+            mockEditor.getRange.mockReturnValue(userText);
+            mockEditor.lastLine.mockReturnValue(3);
+            mockEditor.getLine.mockReturnValue('');
+            
+            mockGetStreamingResponse.mockImplementation(async (prompt: any, onUpdate: any) => {
+                onUpdate('AI response chunk 1');
+                onUpdate(' AI response chunk 2');
+            });
+
+            await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
+
+            // Verify separator was inserted first
+            expect(mockEditor.replaceRange).toHaveBeenCalledWith(
+                '\n\n\n----\n\n\n',
+                cursorPos,
+                cursorPos
+            );
+
+            // Verify AI response was inserted at cursor position (not replacing user text)
+            // The first update should replace from cursor to cursor (insert mode)
+            expect(mockEditor.replaceRange).toHaveBeenCalledWith(
+                'AI response chunk 1',
+                cursorPos,
+                cursorPos
+            );
+        });
     });
 
     describe('Position Calculation Methods', () => {

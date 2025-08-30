@@ -473,27 +473,29 @@ export class CommandHandler {
                 const selectionStart = editor.getCursor('from');
                 const selectionEnd = editor.getCursor('to');
 
+                // Determine where the response should be inserted based on mode
+                let responseStartPos: { line: number; ch: number };
+
                 // Handle text replacement based on mode
                 if (conversationMode) {
-                    // Conversation mode: insert response + separator at cursor
-                    // No text replacement needed yet - we'll insert at cursor position
+                    // Conversation mode: insert separator first at cursor position, then stream response above it
+                    const cursor = editor.getCursor();
+                    const separatorWithNewline = '\n' + this.plugin.settings.chatSeparator + '\n';
+                    editor.replaceRange(separatorWithNewline, cursor, cursor);
+                    
+                    // Calculate where the response should start (above the separator we just inserted)
+                    responseStartPos = cursor; // Response goes at the original cursor position
                 } else if (!separatorMode) {
                     // Selection mode: replace selection with query + separator
                     editor.replaceSelection(initialContent);
-                }
-
-                // Determine where the response should be inserted based on mode
-                let responseStartPos: { line: number; ch: number };
-                
-                if (conversationMode) {
-                    // Insert response at cursor position
-                    responseStartPos = editor.getCursor();
+                    // Selection mode: insert at start of replaced text
+                    responseStartPos = { line: selectionStart.line, ch: selectionStart.ch };
                 } else if (separatorMode && separatorLineIndex !== null) {
                     // Separator mode: insert before the separator line
                     responseStartPos = { line: separatorLineIndex, ch: 0 };
                 } else {
-                    // Selection mode: insert at start of replaced text
-                    responseStartPos = { line: selectionStart.line, ch: selectionStart.ch };
+                    // Fallback case
+                    responseStartPos = editor.getCursor();
                 }
 
                 // Buffer for accumulating the response
@@ -506,12 +508,11 @@ export class CommandHandler {
                     responseBuffer += text;
 
                     if (conversationMode) {
-                        // Conversation mode: insert response + separator + newline
-                        const insertText = responseBuffer + '\n' + this.plugin.settings.chatSeparator + '\n';
-                        editor.replaceRange(insertText, responseStartPos, lastInsertedEnd);
-                        lastInsertedEnd = this.calculateEndPosition(responseStartPos, insertText);
+                        // Conversation mode: replace only the response part (separator already inserted)
+                        editor.replaceRange(responseBuffer, responseStartPos, lastInsertedEnd);
+                        lastInsertedEnd = this.calculateEndPosition(responseStartPos, responseBuffer);
                         
-                        // Keep cursor at end of inserted content
+                        // Keep cursor positioned after the response
                         editor.setCursor(lastInsertedEnd);
                     } else if (separatorMode) {
                         // Separator mode: insert response with trailing newline
