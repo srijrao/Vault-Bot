@@ -14,7 +14,7 @@ Checklist
 - [x] Append progress notes to this document
 
 Plan
-- Reuse the existing streaming insertion logic from `handleGetResponse`, but change the insertion point so the AI response is inserted above the user's selection instead of after it. Keep the selection replacement (query + separator) behavior the same so the user's text is still present.
+- Reuse the existing streaming insertion logic from `handleGetResponseBelow`, but change the insertion point so the AI response is inserted above the user's selection instead of after it. Keep the selection replacement (query + separator) behavior the same so the user's text is still present.
 - Implement a new command id `get-response-above` and wire it in `main.ts` to call `handleGetResponseAbove`.
 - Implement recording and redaction the same as the existing handler.
 - Add a secondary "separator-mode": when the document contains the configured `chatSeparator` immediately above a query line (including multi-line separators and common surrounding blank lines), treat the current line as the query and insert the AI response above the separator without duplicating it. This supports the pattern:

@@ -5,7 +5,7 @@ Date: 2025-08-18 21:25:11 (UTC offset UTC−05:00)
 ## Plan
 - Add a recorder utility to write chat request/response to `.obsidian/plugins/Vault-Bot/ai-calls/` with YAML header and JSON sections.
 - Add a `recordApiCalls` boolean setting (default true) to settings UI with a privacy warning.
-- Integrate recording in `CommandHandler.handleGetResponse`: capture request start time, collect streamed response, compute duration, and write the file off the UI thread with retries.
+- Integrate recording in `CommandHandler.handleGetResponseBelow`: capture request start time, collect streamed response, compute duration, and write the file off the UI thread with retries.
 - Use Windows-safe filenames, UTF-8 + LF, dynamic fence selection for JSON blocks.
 - Keep failures non-fatal and logged.
 

@@ -11,18 +11,18 @@ export default class VaultBotPlugin extends Plugin {
 		this.commandHandler = new CommandHandler(this);
 
 		this.addCommand({
-			id: 'get-response',
-			name: 'Get Response',
+			id: 'get-response-below',
+			name: 'Get Response Below',
 			editorCallback: (editor, view) => {
 				if (view instanceof MarkdownView) {
-					this.commandHandler.handleGetResponse(editor, view);
+					this.commandHandler.handleGetResponseBelow(editor, view);
 				}
 			}
 		});
 
 		this.addCommand({
 			id: 'get-response-above',
-			name: 'Get Response (Insert Above)',
+			name: 'Get Response Above',
 			editorCallback: (editor, view) => {
 				if (view instanceof MarkdownView) {
 					this.commandHandler.handleGetResponseAbove(editor, view);

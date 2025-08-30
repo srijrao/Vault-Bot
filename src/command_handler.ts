@@ -70,7 +70,7 @@ export class CommandHandler {
         }
     }
 
-    async handleGetResponse(editor: Editor, view: MarkdownView) {
+    async handleGetResponseBelow(editor: Editor, view: MarkdownView) {
         const selection = editor.getSelection();
         if (selection) {
             if (this.abortController) {

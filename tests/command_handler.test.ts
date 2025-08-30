@@ -54,7 +54,7 @@ describe('CommandHandler', () => {
         commandHandler.abortController = new AbortController();
         mockEditor.getSelection.mockReturnValue('some text');
         
-        await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+        await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
         
         expect(mockNotice).toHaveBeenCalledWith('A response is already in progress. Please stop it first.');
     });
@@ -62,7 +62,7 @@ describe('CommandHandler', () => {
     it('should show notice if no text is selected', async () => {
         mockEditor.getSelection.mockReturnValue('');
         
-        await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+        await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
         
         expect(mockNotice).toHaveBeenCalledWith('You must highlight text to get a response.');
     });
@@ -80,7 +80,7 @@ describe('CommandHandler', () => {
             return { line: 0, ch: 50 }; // Default cursor position
         });
 
-        await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+        await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
         expect(mockEditor.replaceSelection).toHaveBeenCalledWith(selection + plugin.settings.chatSeparator);
         expect(mockGetStreamingResponse).toHaveBeenCalledWith(selection, expect.any(Function), expect.any(AbortSignal));
@@ -102,7 +102,7 @@ describe('CommandHandler', () => {
             onUpdate('chunk2');
         });
 
-        await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+        await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
         // Verify the first update call - should replace just the response area with 'chunk1'
         const firstCall = mockEditor.replaceRange.mock.calls[0];
@@ -149,7 +149,7 @@ describe('CommandHandler', () => {
         mockEditor.getCursor.mockImplementation((type?: string) => ({ line: 0, ch: 0 }));
         mockGetStreamingResponse.mockRejectedValue(new Error('API Error'));
 
-        await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+        await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
         expect(mockNotice).toHaveBeenCalledWith('Error getting response from AI.');
         expect(commandHandler.abortController).toBe(null);
@@ -209,7 +209,7 @@ describe('CommandHandler', () => {
                 onUpdate('response');
             });
 
-            await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+            await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
             const call = mockEditor.replaceRange.mock.calls[0];
             expect(call[0]).toBe('response'); // Only response content in buffer
@@ -237,7 +237,7 @@ describe('CommandHandler', () => {
                 onUpdate('response');
             });
 
-            await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+            await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
             const call = mockEditor.replaceRange.mock.calls[0];
             expect(call[0]).toBe('response'); // Only response content in buffer
@@ -265,7 +265,7 @@ describe('CommandHandler', () => {
                 onUpdate('response');
             });
 
-            await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+            await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
             const call = mockEditor.replaceRange.mock.calls[0];
             expect(call[0]).toBe('response'); // Only response content
@@ -292,7 +292,7 @@ describe('CommandHandler', () => {
                 onUpdate('response');
             });
 
-            await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+            await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
             const call = mockEditor.replaceRange.mock.calls[0];
             expect(call[0]).toBe('response'); // Only response content
@@ -320,7 +320,7 @@ describe('CommandHandler', () => {
                 onUpdate('line1\nline2');
             });
 
-            await commandHandler.handleGetResponse(mockEditor as any, mockMarkdownView);
+            await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
             const call = mockEditor.replaceRange.mock.calls[0];
             expect(call[0]).toBe('line1\nline2'); // Only response content
