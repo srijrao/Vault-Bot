@@ -35,11 +35,11 @@ export interface RecordMeta {
 }
 
 function sanitizeForFilename(input: string, maxLen = 40): string {
-  // Remove Windows-forbidden characters and trim
+  // Remove Windows-forbidden characters and normalize to underscores for primary separation
   let out = input
-    .replace(/[<>:\"/\\|?*]/g, '-')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
+    .replace(/[<>:\"/\\|?*]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
     .toLowerCase();
   if (out.length > maxLen) out = out.slice(0, maxLen);
   return out || 'unknown';
@@ -137,9 +137,8 @@ export async function recordChatCall(params: {
     const { dir, provider, model, request, response } = params;
 
     const start = new Date(request.timestamp);
-    const utc = formatUtcStamp(start);
 
-    // Filename-safe local stamp: YYYYMMDD-HHMMSS±HHMM (no colon) for Windows-safe filenames
+    // Filename-safe local stamp: YYYYMMDD_HHMMSS±HHMM (no colon) for Windows-safe filenames
     const formatLocalStampForFilename = (d: Date): string => {
       const pad = (n: number, w = 2) => n.toString().padStart(w, '0');
       const year = d.getFullYear();
@@ -153,16 +152,47 @@ export async function recordChatCall(params: {
       const tzAbsMin = Math.abs(tzMin);
       const tzHour = pad(Math.floor(tzAbsMin / 60));
       const tzMinute = pad(tzAbsMin % 60);
-      return `${year}${month}${day}-${hours}${minutes}${seconds}${sign}${tzHour}${tzMinute}`;
+      return `${year}${month}${day}_${hours}${minutes}${seconds}${sign}${tzHour}${tzMinute}`;
     };
     const localForFile = formatLocalStampForFilename(start);
 
-    const providerSafe = sanitizeForFilename(provider);
-    const modelSafe = sanitizeForFilename(model);
-    const uniq = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  // Include both local (readable with offset) and UTC compact stamps in the filename
-  // e.g. vault-bot-local_20250819-135857+0200-utc_20250819-115857-openai-gpt-xxxx.txt
-  const baseName = `vault-bot-local_${localForFile}-utc_${utc}-${providerSafe}-${modelSafe}-${uniq}.txt`;
+    // Build a concise filename using underscores, capped around 120 chars, with a short unique suffix
+    const MAX_NAME = 120;
+    const ext = '.txt';
+    const uniq = Math.random().toString(36).slice(2, 7); // short unique suffix
+    const prefix = `vault-bot_${localForFile}_`;
+    let providerSafe = sanitizeForFilename(provider, 64);
+    let modelSafe = sanitizeForFilename(model, 64);
+
+    // Compute dynamic truncation to meet MAX_NAME
+    const fixedLen = prefix.length + 1 /* _ between provider & model */ + 1 /* _ before uniq */ + uniq.length + ext.length;
+    let remaining = MAX_NAME - fixedLen;
+    if (remaining < 16) remaining = 16; // ensure some room
+
+    // Allocate space between provider and model; keep at least 6 chars each
+    const minEach = 6;
+    let provMax = Math.max(minEach, Math.floor((remaining - 1) / 2)); // -1 for underscore between
+    let modelMax = Math.max(minEach, remaining - 1 - provMax);
+
+    providerSafe = sanitizeForFilename(provider, provMax);
+    modelSafe = sanitizeForFilename(model, modelMax);
+
+    let baseName = `${prefix}${providerSafe}_${modelSafe}_${uniq}${ext}`;
+    if (baseName.length > MAX_NAME) {
+      // Further shrink model first, then provider, keeping minimums
+      const over = baseName.length - MAX_NAME;
+      const modelShrinkable = Math.max(0, modelSafe.length - minEach);
+      const modelShrink = Math.min(over, modelShrinkable);
+      if (modelShrink > 0) modelSafe = modelSafe.slice(0, modelSafe.length - modelShrink);
+      baseName = `${prefix}${providerSafe}_${modelSafe}_${uniq}${ext}`;
+      if (baseName.length > MAX_NAME) {
+        const over2 = baseName.length - MAX_NAME;
+        const provShrinkable = Math.max(0, providerSafe.length - minEach);
+        const provShrink = Math.min(over2, provShrinkable);
+        if (provShrink > 0) providerSafe = providerSafe.slice(0, providerSafe.length - provShrink);
+        baseName = `${prefix}${providerSafe}_${modelSafe}_${uniq}${ext}`;
+      }
+    }
 
     const destPath = path.join(dir, baseName);
 
@@ -170,9 +200,9 @@ export async function recordChatCall(params: {
     const responseJson = JSON.stringify(response, null, 2);
     const fence = chooseFence(requestJson, responseJson);
 
-    // Present a human-readable local timestamp (with UTC offset) in the YAML header
-    // while preserving the original ISO timestamp inside the JSON blocks.
-    let meta: RecordMeta & { timestamp_iso?: string } = {
+  // Present a human-readable local timestamp (with UTC offset) in the YAML header
+  // while preserving the original ISO timestamp inside the JSON blocks.
+    let meta: RecordMeta & { timestamp_iso?: string; timestamp_utc_iso?: string } = {
       provider,
       model,
       timestamp: formatLocalWithOffset(start),
@@ -180,9 +210,10 @@ export async function recordChatCall(params: {
       truncated: response.truncated,
       redacted: params.redacted ?? false,
       timestamp_iso: request.timestamp,
+      timestamp_utc_iso: start.toISOString(),
     };
     // Build once to compute size, then rebuild with size_bytes
-    const buildBody = (m: RecordMeta & { timestamp_iso?: string }) => {
+    const buildBody = (m: RecordMeta & { timestamp_iso?: string; timestamp_utc_iso?: string }) => {
       let s = '';
       s += '---\n';
       s += `provider: ${m.provider}\n`;
@@ -190,6 +221,7 @@ export async function recordChatCall(params: {
   // local, human-readable timestamp with UTC offset for quick scanning
   s += `timestamp_local: ${m.timestamp}\n`;
   if ((m as any).timestamp_iso !== undefined) s += `timestamp_iso: ${(m as any).timestamp_iso}\n`;
+  if ((m as any).timestamp_utc_iso !== undefined) s += `timestamp_utc_iso: ${(m as any).timestamp_utc_iso}\n`;
       s += `duration_ms: ${m.duration_ms ?? ''}\n`;
       if (m.truncated !== undefined) s += `truncated: ${!!m.truncated}\n`;
       if (m.redacted !== undefined) s += `redacted: ${!!m.redacted}\n`;
