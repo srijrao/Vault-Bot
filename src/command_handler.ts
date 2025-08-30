@@ -1,5 +1,5 @@
 import { Editor, MarkdownView, Notice } from 'obsidian';
-import { AIProviderWrapper } from './aiprovider';
+import { AIProviderWrapper, AIMessage } from './aiprovider';
 import VaultBotPlugin from '../main';
 import { recordChatCall, resolveAiCallsDir, type ChatRequestRecord, type ChatResponseRecord } from './recorder';
 import { redactMessages } from './redaction';
@@ -30,6 +30,64 @@ export class CommandHandler {
 
     public onSettingsChanged() {
         this.calculateSeparatorMetrics();
+    }
+
+    private parseConversationFromText(text: string, reverseOrder: boolean = false): { conversation: AIMessage[]; lastUserMessage: string } {
+        const separator = this.plugin.settings.chatSeparator;
+        
+        // Split text by separator to get conversation parts
+        let parts = text.split(separator);
+        
+        // If no separator found or only one part, treat entire text as user message
+        if (parts.length <= 1) {
+            return {
+                conversation: [],
+                lastUserMessage: text.trim()
+            };
+        }
+
+        // If reverse order (for Get Response Above), reverse the parts array
+        if (reverseOrder) {
+            parts = parts.reverse();
+        }
+
+        const conversation: AIMessage[] = [];
+        let lastUserMessage = '';
+
+        // Process each part, alternating between user and assistant
+        for (let i = 0; i < parts.length; i++) {
+            const content = parts[i].trim();
+            if (!content) continue;
+
+            if (i % 2 === 0) {
+                // Even index = user message
+                conversation.push({ role: 'user', content });
+                lastUserMessage = content;
+            } else {
+                // Odd index = assistant message
+                conversation.push({ role: 'assistant', content });
+            }
+        }
+
+        return { conversation, lastUserMessage };
+    }
+
+    private buildConversationMessages(conversationParts: AIMessage[]): AIMessage[] {
+        const messages: AIMessage[] = [];
+        
+        // Add system prompt if available
+        const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
+        const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
+        const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
+        
+        if (systemPrompt) {
+            messages.push({ role: 'system', content: systemPrompt });
+        }
+
+        // Add conversation history
+        messages.push(...conversationParts);
+
+        return messages;
     }
 
     private calculateResponseStartPosition(selectionStart: { line: number; ch: number }, initialContent: string): { line: number; ch: number } {
@@ -72,7 +130,9 @@ export class CommandHandler {
 
     async handleGetResponseBelow(editor: Editor, view: MarkdownView) {
         const selection = editor.getSelection();
-        if (selection) {
+        
+        // Handle conversation mode when nothing is selected
+        if (!selection) {
             if (this.abortController) {
                 new Notice('A response is already in progress. Please stop it first.');
                 return;
@@ -82,18 +142,32 @@ export class CommandHandler {
 
             try {
                 const provider = new AIProviderWrapper(this.plugin.settings);
-                const initialContent = selection + this.plugin.settings.chatSeparator;
                 const requestStart = new Date();
                 
-                // Get the selection range before replacing
-                const selectionStart = editor.getCursor('from');
-                const selectionEnd = editor.getCursor('to');
+                // Get cursor position
+                const cursor = editor.getCursor();
                 
-                // Replace selection with initial content (query + separator)
-                editor.replaceSelection(initialContent);
+                // Get all text from start of document to cursor
+                const textAboveCursor = editor.getRange({ line: 0, ch: 0 }, cursor);
                 
-                // Calculate where the response should start
-                const responseStartPos = this.calculateResponseStartPosition(selectionStart, initialContent);
+                // Parse conversation from text above cursor
+                const { conversation, lastUserMessage } = this.parseConversationFromText(textAboveCursor);
+                
+                // If no conversation found, treat all text as user prompt
+                const queryText = conversation.length > 0 ? lastUserMessage : textAboveCursor.trim();
+                
+                if (!queryText) {
+                    new Notice('No text found above cursor to create a response.');
+                    this.abortController = null;
+                    return;
+                }
+                
+                // Insert separator at cursor position
+                const separatorWithNewline = this.plugin.settings.chatSeparator + '\n';
+                editor.replaceRange(separatorWithNewline, cursor, cursor);
+                
+                // Calculate where the response should start (after separator)
+                const responseStartPos = this.calculateResponseStartPosition(cursor, separatorWithNewline);
                 
                 // Buffer for accumulating the response
                 let responseBuffer = "";
@@ -105,7 +179,6 @@ export class CommandHandler {
                     responseBuffer += text;
                     
                     // Clear previous response and insert updated buffer
-                    // This ensures we always have a clean, consistent state
                     editor.replaceRange(responseBuffer, lastUpdatePos, editor.getCursor());
                     
                     // Update cursor position to end of inserted content
@@ -114,12 +187,17 @@ export class CommandHandler {
                     lastUpdatePos = responseStartPos; // Reset for next update
                 };
 
-                await provider.getStreamingResponse(selection, onUpdate, signal);
+                // Use conversation context if available, otherwise use simple prompt
+                if (conversation.length > 0) {
+                    const conversationMessages = this.buildConversationMessages(conversation);
+                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal);
+                } else {
+                    await provider.getStreamingResponse(queryText, onUpdate, signal);
+                }
 
                 // After streaming completes, optionally record the call
                 if (this.plugin.settings.recordApiCalls) {
                     try {
-                        // Narrow provider-specific fields safely
                         const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
                         const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
                         const model = typeof cfgAny?.model === 'string' ? cfgAny.model : '';
@@ -128,7 +206,7 @@ export class CommandHandler {
 
                         const redaction = redactMessages([
                             { role: 'system', content: systemPrompt },
-                            { role: 'user', content: selection },
+                            { role: 'user', content: queryText },
                         ]);
 
                         const requestRecord: ChatRequestRecord = {
@@ -158,7 +236,6 @@ export class CommandHandler {
                         });
                     } catch (recErr) {
                         console.error('Recording AI call failed (non-fatal):', recErr);
-                        // Show a light notice only if it repeatedly fails would be ideal; keep it quiet here.
                     }
                 }
 
@@ -170,8 +247,106 @@ export class CommandHandler {
             } finally {
                 this.abortController = null;
             }
-        } else {
-            new Notice('You must highlight text to get a response.');
+            return;
+        }
+
+        // Original behavior when text is selected
+        if (this.abortController) {
+            new Notice('A response is already in progress. Please stop it first.');
+            return;
+        }
+        this.abortController = new AbortController();
+        const signal = this.abortController.signal;
+
+        try {
+            const provider = new AIProviderWrapper(this.plugin.settings);
+            const initialContent = selection + this.plugin.settings.chatSeparator;
+            const requestStart = new Date();
+            
+            // Get the selection range before replacing
+            const selectionStart = editor.getCursor('from');
+            const selectionEnd = editor.getCursor('to');
+            
+            // Replace selection with initial content (query + separator)
+            editor.replaceSelection(initialContent);
+            
+            // Calculate where the response should start
+            const responseStartPos = this.calculateResponseStartPosition(selectionStart, initialContent);
+            
+            // Buffer for accumulating the response
+            let responseBuffer = "";
+            let lastUpdatePos = responseStartPos;
+            
+            const onUpdate = (text: string) => {
+                if (!text) return; // Skip empty chunks
+                
+                responseBuffer += text;
+                
+                // Clear previous response and insert updated buffer
+                // This ensures we always have a clean, consistent state
+                editor.replaceRange(responseBuffer, lastUpdatePos, editor.getCursor());
+                
+                // Update cursor position to end of inserted content
+                const newCursor = this.calculateEndPosition(responseStartPos, responseBuffer);
+                editor.setCursor(newCursor);
+                lastUpdatePos = responseStartPos; // Reset for next update
+            };
+
+            await provider.getStreamingResponse(selection, onUpdate, signal);
+
+            // After streaming completes, optionally record the call
+            if (this.plugin.settings.recordApiCalls) {
+                try {
+                    // Narrow provider-specific fields safely
+                    const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
+                    const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
+                    const model = typeof cfgAny?.model === 'string' ? cfgAny.model : '';
+                    const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
+                    const temperature = typeof cfgAny?.temperature === 'number' ? cfgAny.temperature : null;
+
+                    const redaction = redactMessages([
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: selection },
+                    ]);
+
+                    const requestRecord: ChatRequestRecord = {
+                        provider: this.plugin.settings.apiProvider,
+                        model,
+                        messages: redaction.messages,
+                        options: { temperature },
+                        timestamp: requestStart.toISOString(),
+                    };
+
+                    const responseRecord: ChatResponseRecord = {
+                        content: responseBuffer || null,
+                        provider: this.plugin.settings.apiProvider,
+                        model,
+                        timestamp: new Date().toISOString(),
+                        duration_ms: Date.now() - requestStart.getTime(),
+                    };
+
+                    const dir = resolveAiCallsDir((this.plugin as any).app);
+                    await recordChatCall({
+                        dir,
+                        provider: requestRecord.provider,
+                        model: requestRecord.model,
+                        request: requestRecord,
+                        response: responseRecord,
+                        redacted: redaction.redacted,
+                    });
+                } catch (recErr) {
+                    console.error('Recording AI call failed (non-fatal):', recErr);
+                    // Show a light notice only if it repeatedly fails would be ideal; keep it quiet here.
+                }
+            }
+
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                new Notice('Error getting response from AI.');
+                console.error(error);
+            }
+        } finally {
+            this.abortController = null;
         }
     }
 
@@ -187,8 +362,7 @@ export class CommandHandler {
         let separatorLineIndex: number | null = null;
 
         if (!selection) {
-            // No selection: check the current cursor line and the previous N lines for the separator pattern.
-            // This supports multi-line separators by leveraging separatorMetrics calculated from settings.
+            // No selection: first check for separator-mode, then fallback to conversation mode
             const cursor = editor.getCursor();
             const currentLine = cursor.line;
             const prevLine = currentLine - 1;
@@ -246,6 +420,26 @@ export class CommandHandler {
                     separatorLineIndex = prevLine;
                 }
             }
+
+            // If separator-mode not detected, try conversation mode
+            if (!separatorMode) {
+                // Get all text from cursor to end of document
+                const textBelowCursor = editor.getRange(cursor, { line: editor.lastLine(), ch: editor.getLine(editor.lastLine()).length });
+                
+                // Parse conversation from text below cursor (reverse order since newest is at top)
+                const { conversation, lastUserMessage } = this.parseConversationFromText(textBelowCursor, true);
+                
+                // If no conversation found, treat all text as user prompt
+                queryText = conversation.length > 0 ? lastUserMessage : textBelowCursor.trim();
+                
+                if (!queryText) {
+                    new Notice('No text found below cursor to create a response.');
+                    return;
+                }
+                
+                // Set up for conversation mode response above cursor
+                separatorMode = false; // We'll handle this differently
+            }
         }
 
         if (queryText) {
@@ -258,63 +452,93 @@ export class CommandHandler {
 
             try {
                 const provider = new AIProviderWrapper(this.plugin.settings);
-                // When in separatorMode the separator is already present in the document;
-                // otherwise keep the same behavior of replacing selection with selection + separator
-                const initialContent = separatorMode ? queryText : (selection + this.plugin.settings.chatSeparator);
                 const requestStart = new Date();
 
-                // Get the selection range before replacing
+                // Determine mode and setup accordingly
+                let conversationMode = false;
+                let conversation: AIMessage[] = [];
+                
+                if (!selection && !separatorMode) {
+                    // This is conversation mode - get text below cursor and parse it (reverse order)
+                    const cursor = editor.getCursor();
+                    const textBelowCursor = editor.getRange(cursor, { line: editor.lastLine(), ch: editor.getLine(editor.lastLine()).length });
+                    const parsedConversation = this.parseConversationFromText(textBelowCursor, true);
+                    conversation = parsedConversation.conversation;
+                    conversationMode = true;
+                }
 
+                const initialContent = separatorMode ? queryText : (selection ? (selection + this.plugin.settings.chatSeparator) : '');
+                
+                // Get the selection range before replacing
                 const selectionStart = editor.getCursor('from');
                 const selectionEnd = editor.getCursor('to');
 
-                // If we are NOT in separatorMode, replace selection with initialContent (query + separator)
-                if (!separatorMode) {
+                // Handle text replacement based on mode
+                if (conversationMode) {
+                    // Conversation mode: insert response + separator at cursor
+                    // No text replacement needed yet - we'll insert at cursor position
+                } else if (!separatorMode) {
+                    // Selection mode: replace selection with query + separator
                     editor.replaceSelection(initialContent);
                 }
 
-                // Determine where the response should be inserted:
-                // - separatorMode: before the separator line (insert at start of separator line)
-                // - normal selection: at the start of the replaced text
-                const responseStartPos = separatorMode && separatorLineIndex !== null
-                    ? { line: separatorLineIndex, ch: 0 }
-                    : { line: selectionStart.line, ch: selectionStart.ch };
+                // Determine where the response should be inserted based on mode
+                let responseStartPos: { line: number; ch: number };
+                
+                if (conversationMode) {
+                    // Insert response at cursor position
+                    responseStartPos = editor.getCursor();
+                } else if (separatorMode && separatorLineIndex !== null) {
+                    // Separator mode: insert before the separator line
+                    responseStartPos = { line: separatorLineIndex, ch: 0 };
+                } else {
+                    // Selection mode: insert at start of replaced text
+                    responseStartPos = { line: selectionStart.line, ch: selectionStart.ch };
+                }
 
                 // Buffer for accumulating the response
                 let responseBuffer = "";
-                // Track the end position of the last inserted/updated response so we can replace it cleanly
                 let lastInsertedEnd = responseStartPos;
 
                 const onUpdate = (text: string) => {
                     if (!text) return;
 
-                    // Append new text to buffer
                     responseBuffer += text;
 
-                    // The inserted representation should include a trailing newline to separate from the separator/query
-                    const insertText = responseBuffer + '\n';
-
-                    if (separatorMode) {
-                        // Replace previously inserted response (if any) with the updated buffer.
-                        // Replace from responseStartPos to lastInsertedEnd (initially same as start => insert)
+                    if (conversationMode) {
+                        // Conversation mode: insert response + separator + newline
+                        const insertText = responseBuffer + '\n' + this.plugin.settings.chatSeparator + '\n';
                         editor.replaceRange(insertText, responseStartPos, lastInsertedEnd);
-                        // Update lastInsertedEnd to the end of the newly inserted text
+                        lastInsertedEnd = this.calculateEndPosition(responseStartPos, insertText);
+                        
+                        // Keep cursor at end of inserted content
+                        editor.setCursor(lastInsertedEnd);
+                    } else if (separatorMode) {
+                        // Separator mode: insert response with trailing newline
+                        const insertText = responseBuffer + '\n';
+                        editor.replaceRange(insertText, responseStartPos, lastInsertedEnd);
                         lastInsertedEnd = this.calculateEndPosition(responseStartPos, insertText);
 
-                        // Restore cursor to the end of the original query line to keep UX consistent
+                        // Restore cursor to the end of the original query line
                         const afterQueryPos = this.calculateEndPosition({ line: (separatorLineIndex as number) + 1, ch: 0 }, editor.getLine((separatorLineIndex as number) + 1));
                         editor.setCursor(afterQueryPos);
                     } else {
-                        // Replace the entire area from responseStartPos to the start of the replaced selection
+                        // Selection mode: replace the entire area
+                        const insertText = responseBuffer + '\n';
                         editor.replaceRange(insertText, responseStartPos, editor.getCursor('from'));
-
-                        // Move cursor to end of replaced selection to keep editor in sensible place
                         editor.setCursor(editor.getCursor('to'));
                         lastInsertedEnd = this.calculateEndPosition(responseStartPos, insertText);
                     }
                 };
 
-                await provider.getStreamingResponse(selection, onUpdate, signal);
+                // Make API call based on mode
+                if (conversationMode && conversation.length > 0) {
+                    const conversationMessages = this.buildConversationMessages(conversation);
+                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal);
+                } else {
+                    const promptText = selection || queryText;
+                    await provider.getStreamingResponse(promptText, onUpdate, signal);
+                }
 
                 // After streaming completes, optionally record the call
                 if (this.plugin.settings.recordApiCalls) {
@@ -325,9 +549,10 @@ export class CommandHandler {
                         const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
                         const temperature = typeof cfgAny?.temperature === 'number' ? cfgAny.temperature : null;
 
+                        const recordedPrompt = selection || queryText;
                         const redaction = redactMessages([
                             { role: 'system', content: systemPrompt },
-                            { role: 'user', content: selection },
+                            { role: 'user', content: recordedPrompt },
                         ]);
 
                         const requestRecord: ChatRequestRecord = {

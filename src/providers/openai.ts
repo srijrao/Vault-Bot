@@ -1,4 +1,4 @@
-import { AIProvider, AIProviderSettings } from "./base";
+import { AIProvider, AIProviderSettings, AIMessage } from "./base";
 import OpenAI from "openai";
 
 export interface OpenAIProviderSettings extends AIProviderSettings {
@@ -34,6 +34,35 @@ export class OpenAIProvider implements AIProvider {
                         content: prompt
                     }
                 ],
+                temperature: this.settings.temperature,
+                stream: true,
+            }, { signal });
+
+            for await (const chunk of stream) {
+                onUpdate(chunk.choices[0]?.delta?.content || '');
+            }
+
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                console.log('OpenAI request was aborted.');
+            } else {
+                console.error('Error in OpenAI API request:', error);
+                throw new Error('Failed to get response from OpenAI.');
+            }
+        }
+    }
+
+    async getStreamingResponseWithConversation(messages: AIMessage[], onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
+        try {
+            // Convert our AIMessage format to OpenAI's format
+            const openaiMessages = messages.map(msg => ({
+                role: msg.role,
+                content: msg.content
+            }));
+
+            const stream = await this.openai.chat.completions.create({
+                model: this.settings.model,
+                messages: openaiMessages,
                 temperature: this.settings.temperature,
                 stream: true,
             }, { signal });

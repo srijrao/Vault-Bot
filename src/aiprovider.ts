@@ -3,11 +3,13 @@ import {
     AIProvider, 
     OpenAIProvider, 
     OpenRouterProvider, 
+    AIMessage,
     type OpenAIProviderSettings, 
     type OpenRouterProviderSettings 
 } from "./providers";
 
 export type ProviderType = 'openai' | 'openrouter';
+export type { AIMessage };
 
 export class AIProviderWrapper {
     private settings: VaultBotPluginSettings;
@@ -37,6 +39,10 @@ export class AIProviderWrapper {
 
     async getStreamingResponse(prompt: string, onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
         return this.provider.getStreamingResponse(prompt, onUpdate, signal);
+    }
+
+    async getStreamingResponseWithConversation(messages: AIMessage[], onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
+        return this.provider.getStreamingResponseWithConversation(messages, onUpdate, signal);
     }
 
     async validateApiKey(): Promise<{ valid: boolean; error?: string }> {

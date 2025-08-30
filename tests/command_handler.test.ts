@@ -13,9 +13,11 @@ vi.mock('obsidian', () => ({
 
 // Mock AI Provider Wrapper
 const mockGetStreamingResponse = vi.fn();
+const mockGetStreamingResponseWithConversation = vi.fn();
 vi.mock('../src/aiprovider', () => ({
     AIProviderWrapper: vi.fn().mockImplementation(() => ({
         getStreamingResponse: mockGetStreamingResponse,
+        getStreamingResponseWithConversation: mockGetStreamingResponseWithConversation,
     })),
 }));
 
@@ -40,6 +42,8 @@ describe('CommandHandler', () => {
             getLine: vi.fn(),
             replaceRange: vi.fn(),
             setCursor: vi.fn(),
+            getRange: vi.fn(),
+            lastLine: vi.fn(),
         };
         
         plugin = {
@@ -59,12 +63,14 @@ describe('CommandHandler', () => {
         expect(mockNotice).toHaveBeenCalledWith('A response is already in progress. Please stop it first.');
     });
 
-    it('should show notice if no text is selected', async () => {
+    it('should show notice if no text is selected and no text above cursor', async () => {
         mockEditor.getSelection.mockReturnValue('');
+        mockEditor.getCursor.mockReturnValue({ line: 0, ch: 0 });
+        mockEditor.getRange.mockReturnValue(''); // No text above cursor
         
         await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
         
-        expect(mockNotice).toHaveBeenCalledWith('You must highlight text to get a response.');
+        expect(mockNotice).toHaveBeenCalledWith('No text found above cursor to create a response.');
     });
 
     it('should call AI provider and update editor on successful response', async () => {
@@ -345,6 +351,70 @@ describe('CommandHandler', () => {
             expect(commandHandler['separatorMetrics']?.separator).toBe(' | ');
             expect(commandHandler['separatorMetrics']?.lineCount).toBe(1);
             expect(commandHandler['separatorMetrics']?.lastLineLength).toBe(3);
+        });
+    });
+
+    describe('Conversation Mode for Get Response Above', () => {
+        it('should handle conversation mode with reverse chronological order', async () => {
+            // Simulate text below cursor in reverse chronological order (newest at top)
+            const conversationText = 'Latest assistant response\n\n----\n\nUser follow-up question\n\n----\n\nOriginal assistant response\n\n----\n\nOriginal user question';
+            mockEditor.getSelection.mockReturnValue('');
+            mockEditor.getCursor.mockReturnValue({ line: 0, ch: 0 });
+            mockEditor.getRange.mockReturnValue(conversationText);
+            mockEditor.lastLine.mockReturnValue(8);
+            mockEditor.getLine.mockReturnValue('');
+            
+            mockGetStreamingResponseWithConversation.mockImplementation(async (messages: any, onUpdate: any) => {
+                onUpdate('New AI response');
+            });
+
+            await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
+
+            // Should call with conversation in correct chronological order for AI processing
+            expect(mockGetStreamingResponseWithConversation).toHaveBeenCalledWith(
+                expect.arrayContaining([
+                    expect.objectContaining({ role: 'user', content: 'Original user question' }),
+                    expect.objectContaining({ role: 'assistant', content: 'Original assistant response' }),
+                    expect.objectContaining({ role: 'user', content: 'User follow-up question' }),
+                    expect.objectContaining({ role: 'assistant', content: 'Latest assistant response' })
+                ]), 
+                expect.any(Function), 
+                expect.any(AbortSignal)
+            );
+        });
+
+        it('should handle conversation mode when no conversation structure found below cursor', async () => {
+            const plainText = 'Just some plain text without separators';
+            mockEditor.getSelection.mockReturnValue('');
+            mockEditor.getCursor.mockReturnValue({ line: 0, ch: 0 });
+            mockEditor.getRange.mockReturnValue(plainText);
+            mockEditor.lastLine.mockReturnValue(2);
+            mockEditor.getLine.mockReturnValue('');
+            
+            mockGetStreamingResponse.mockImplementation(async (prompt: any, onUpdate: any) => {
+                onUpdate('AI response to plain text');
+            });
+
+            await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
+
+            // Should fall back to treating entire text as user prompt
+            expect(mockGetStreamingResponse).toHaveBeenCalledWith(
+                plainText.trim(),
+                expect.any(Function), 
+                expect.any(AbortSignal)
+            );
+        });
+
+        it('should handle empty text below cursor for Get Response Above', async () => {
+            mockEditor.getSelection.mockReturnValue('');
+            mockEditor.getCursor.mockReturnValue({ line: 5, ch: 0 });
+            mockEditor.getRange.mockReturnValue(''); // No text below cursor
+            mockEditor.lastLine.mockReturnValue(5);
+            mockEditor.getLine.mockReturnValue('');
+            
+            await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
+            
+            expect(mockNotice).toHaveBeenCalledWith('No text found below cursor to create a response.');
         });
     });
 
