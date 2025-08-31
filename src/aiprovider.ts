@@ -38,11 +38,59 @@ export class AIProviderWrapper {
     }
 
     async getStreamingResponse(prompt: string, onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
-        return this.provider.getStreamingResponse(prompt, onUpdate, signal);
+        // Normalize single prompt to message array and use wrapper's conversation method
+        const messages = this.normalizeToMessages(prompt);
+        return this.getStreamingResponseWithConversation(messages, onUpdate, signal);
     }
 
     async getStreamingResponseWithConversation(messages: AIMessage[], onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
-        return this.provider.getStreamingResponseWithConversation(messages, onUpdate, signal);
+        // Prepend system prompt if it doesn't already exist and system prompt is configured
+        const messagesWithSystemPrompt = this.prependSystemPrompt(messages);
+        return this.provider.getStreamingResponseWithConversation(messagesWithSystemPrompt, onUpdate, signal);
+    }
+
+    private normalizeToMessages(prompt: string): AIMessage[] {
+        return [
+            {
+                role: 'user',
+                content: prompt
+            }
+        ];
+    }
+
+    private prependSystemPrompt(messages: AIMessage[]): AIMessage[] {
+        const systemPrompt = this.getSystemPrompt();
+        
+        // If no system prompt configured, return messages as-is
+        if (!systemPrompt) {
+            return messages;
+        }
+
+        // If first message is already a system message, return messages as-is
+        if (messages.length > 0 && messages[0].role === 'system') {
+            return messages;
+        }
+
+        // Prepend system prompt
+        return [
+            {
+                role: 'system',
+                content: systemPrompt
+            },
+            ...messages
+        ];
+    }
+
+    private getSystemPrompt(): string | null {
+        const providerType = this.settings.apiProvider as ProviderType;
+        const providerSettings = this.settings.aiProviderSettings[providerType];
+        
+        if (providerSettings && 'system_prompt' in providerSettings) {
+            const systemPrompt = (providerSettings as any).system_prompt;
+            return systemPrompt && systemPrompt.trim() ? systemPrompt : null;
+        }
+        
+        return null;
     }
 
     async validateApiKey(): Promise<{ valid: boolean; error?: string }> {

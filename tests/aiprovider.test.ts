@@ -28,11 +28,13 @@ describe("AIProviderWrapper", () => {
         // Create mock instances
         mockOpenAIProvider = {
             getStreamingResponse: vi.fn(),
+            getStreamingResponseWithConversation: vi.fn(),
             validateApiKey: vi.fn(),
         };
         
         mockOpenRouterProvider = {
             getStreamingResponse: vi.fn(),
+            getStreamingResponseWithConversation: vi.fn(),
             validateApiKey: vi.fn(),
         };
 
@@ -121,7 +123,7 @@ describe("AIProviderWrapper", () => {
                 openai: {
                     api_key: "test-key",
                     model: "gpt-4o",
-                    system_prompt: "Test prompt",
+                    system_prompt: "Test system prompt",
                     temperature: 0.7,
                 } as OpenAIProviderSettings,
             },
@@ -132,13 +134,22 @@ describe("AIProviderWrapper", () => {
         const abortController = new AbortController();
 
         await wrapper.getStreamingResponse(
-            "Test prompt",
+            "Test user prompt",
             onUpdate,
             abortController.signal
         );
 
-        expect(mockOpenAIProvider.getStreamingResponse).toHaveBeenCalledWith(
-            "Test prompt",
+        expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
+            [
+                {
+                    role: "system",
+                    content: "Test system prompt"
+                },
+                {
+                    role: "user",
+                    content: "Test user prompt"
+                }
+            ],
             onUpdate,
             abortController.signal
         );
@@ -214,8 +225,17 @@ describe("AIProviderWrapper", () => {
         const onUpdate1 = vi.fn();
         const abortController1 = new AbortController();
         await wrapper.getStreamingResponse("Test 1", onUpdate1, abortController1.signal);
-        expect(mockOpenAIProvider.getStreamingResponse).toHaveBeenCalledWith(
-            "Test 1",
+        expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
+            [
+                {
+                    role: "system",
+                    content: "Test prompt"
+                },
+                {
+                    role: "user",
+                    content: "Test 1"
+                }
+            ],
             onUpdate1,
             abortController1.signal
         );
@@ -241,8 +261,17 @@ describe("AIProviderWrapper", () => {
         const onUpdate2 = vi.fn();
         const abortController2 = new AbortController();
         await wrapper.getStreamingResponse("Test 2", onUpdate2, abortController2.signal);
-        expect(mockOpenRouterProvider.getStreamingResponse).toHaveBeenCalledWith(
-            "Test 2",
+        expect(mockOpenRouterProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
+            [
+                {
+                    role: "system",
+                    content: "Test prompt"
+                },
+                {
+                    role: "user",
+                    content: "Test 2"
+                }
+            ],
             onUpdate2,
             abortController2.signal
         );
@@ -354,6 +383,184 @@ describe("AIProviderWrapper", () => {
             expect(mockOpenRouterProvider.validateApiKey).toHaveBeenCalledOnce();
             expect(result.valid).toBe(false);
             expect(result.error).toBe("Invalid API key");
+        });
+    });
+
+    describe("System Prompt Functionality", () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it("should prepend system prompt when available", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "You are a helpful assistant",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
+                [
+                    { role: "system", content: "You are a helpful assistant" },
+                    { role: "user", content: "Hello" }
+                ],
+                onUpdate,
+                abortController.signal
+            );
+        });
+
+        it("should not prepend system prompt if already present", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "You are a helpful assistant",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [
+                    { role: "system", content: "Custom system prompt" },
+                    { role: "user", content: "Hello" }
+                ],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
+                [
+                    { role: "system", content: "Custom system prompt" },
+                    { role: "user", content: "Hello" }
+                ],
+                onUpdate,
+                abortController.signal
+            );
+        });
+
+        it("should handle empty system prompt gracefully", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+        });
+
+        it("should handle whitespace-only system prompt gracefully", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "   ",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+        });
+
+        it("should work with OpenRouter provider", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openrouter",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openrouter: {
+                        api_key: "test-key",
+                        model: "openai/gpt-4o",
+                        system_prompt: "OpenRouter system prompt",
+                        temperature: 0.7,
+                    } as OpenRouterProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponse(
+                "Test prompt",
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenRouterProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
+                [
+                    { role: "system", content: "OpenRouter system prompt" },
+                    { role: "user", content: "Test prompt" }
+                ],
+                onUpdate,
+                abortController.signal
+            );
         });
     });
 });

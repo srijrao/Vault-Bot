@@ -85,7 +85,6 @@ describe('OpenRouterProvider', () => {
         expect(streamText).toHaveBeenCalledWith({
             model: mockModel,
             messages: [
-                { role: 'system', content: 'You are a helpful assistant.' },
                 { role: 'user', content: 'Test prompt' }
             ],
             temperature: 0.7,
