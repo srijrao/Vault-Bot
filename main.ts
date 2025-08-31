@@ -1,5 +1,6 @@
 import { Plugin, MarkdownView } from 'obsidian';
 import { CommandHandler } from './src/command_handler';
+import { zipOldAiCalls } from './src/archiveCalls';
 import { VaultBotPluginSettings, DEFAULT_SETTINGS, VaultBotSettingTab } from './src/settings';
 
 export default class VaultBotPlugin extends Plugin {
@@ -9,6 +10,9 @@ export default class VaultBotPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.commandHandler = new CommandHandler(this);
+
+		// On startup, sort prior-day AI call logs into date folders (skip today), then solid-compress those folders
+		try { await zipOldAiCalls((this as any).app); } catch (err) { console.error('zipOldAiCalls failed:', err); }
 
 		this.addCommand({
 			id: 'get-response-below',

@@ -6,6 +6,7 @@ import { exec, spawn } from 'child_process';
 import type { OpenAIProviderSettings, OpenRouterProviderSettings } from './aiprovider';
 import type { AIProviderSettings } from './providers';
 import { AIProviderWrapper } from './aiprovider';
+import { zipOldAiCalls } from './archiveCalls';
 
 export interface VaultBotPluginSettings {
 	apiProvider: string;
@@ -146,6 +147,20 @@ export class VaultBotSettingTab extends PluginSettingTab {
 						this.display();
 					}
 				}))
+
+		new Setting(containerEl)
+			.setName('Archive AI calls now')
+			.setDesc('Sort prior-day files into date folders and solid-compress them')
+			.addButton(btn => btn
+				.setButtonText('Compress Now')
+				.setTooltip('Sorts previous days into folders and creates solid .7z archives')
+				.onClick(async () => {
+					try {
+						await zipOldAiCalls((this as any).app);
+					} catch (e) {
+						console.error('Manual archive failed', e);
+					}
+				}));
 
 		new Setting(containerEl)
 			.setName('Chat Separator')

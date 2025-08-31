@@ -11,6 +11,12 @@ vi.mock('../src/aiprovider', () => ({
     })),
 }));
 
+// Mock archiver
+const mockZipOldAiCalls = vi.fn();
+vi.mock('../src/archiveCalls', () => ({
+    zipOldAiCalls: (...args: any[]) => mockZipOldAiCalls(...args),
+}));
+
 // Mock Notice
 const mockNotice = vi.fn();
 vi.mock('obsidian', () => ({
@@ -160,7 +166,7 @@ describe('VaultBotSettingTab', () => {
         
     // Should create 8 settings: Provider Dropdown, API Key, Record toggle, Folder actions, Chat Separator, Model, System Prompt, Temperature
         const { Setting } = await import('obsidian');
-    expect(Setting).toHaveBeenCalledTimes(8);
+    expect(Setting).toHaveBeenCalledTimes(9); // +1 for Archive AI calls now
     });
 
     it('should set up API Key setting correctly', () => {
@@ -192,6 +198,18 @@ describe('VaultBotSettingTab', () => {
     it('should test API key validation functionality exists', () => {
         // Just verify the method exists without testing Notice integration
         expect(typeof (settingTab as any).testApiKey).toBe('function');
+    });
+
+    it('should wire Archive AI calls now button to call zipOldAiCalls', async () => {
+        settingTab.display();
+        // Find the call for the Archive setting's button
+        const { Setting } = await import('obsidian');
+        // Last few calls will include our button wiring; we can simulate by invoking the onClick passed earlier.
+        // Since our mock Setting returns the same object, we can inspect mockButton.onClick
+        expect(typeof (mockButton.onClick as any).mock).toBe('object');
+        // Simulate click
+        await (mockButton.onClick as any).mock.calls[ (mockButton.onClick as any).mock.calls.length - 1][0]();
+        expect(mockZipOldAiCalls).toHaveBeenCalled();
     });
 });
 

@@ -1,6 +1,9 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import fs from "fs";
+import path from "path";
+import { path7za } from "7zip-bin";
 
 const banner =
 `/*
@@ -41,9 +44,25 @@ const context = await esbuild.context({
 	minify: prod,
 });
 
+async function copy7zBin() {
+	try {
+		const outDir = process.cwd();
+		const binDir = path.join(outDir, 'bin');
+		await fs.promises.mkdir(binDir, { recursive: true });
+		const exeName = process.platform === 'win32' ? '7za.exe' : '7za';
+		const dest = path.join(binDir, exeName);
+		await fs.promises.copyFile(path7za, dest);
+		console.log(`[build] Copied 7z binary to ${dest}`);
+	} catch (err) {
+		console.warn('[build] Failed to copy 7z binary:', err);
+	}
+}
+
 if (prod) {
 	await context.rebuild();
+	await copy7zBin();
 	process.exit(0);
 } else {
 	await context.watch();
+	await copy7zBin();
 }
