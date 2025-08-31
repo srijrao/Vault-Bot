@@ -451,7 +451,7 @@ class ConfirmClearModal extends Modal {
     const options = contentEl.createDiv({ cls: 'modal-button-container' });
     const btn1 = options.createEl('button', { text: '1. .txt files only' });
     const btn2 = options.createEl('button', { text: '2. .txt + .7z archives' });
-    const btn3 = options.createEl('button', { text: '3. .txt + .7z + date folders (excluding today)', cls: 'mod-warning' });
+    const btn3 = options.createEl('button', { text: '3. .txt + .7z + date folders', cls: 'mod-warning' });
     const cancel = options.createEl('button', { text: 'Cancel' });
     btn1.addEventListener('click', () => { this.resolver('txt'); this.close(); });
     btn2.addEventListener('click', () => { this.resolver('archives'); this.close(); });
