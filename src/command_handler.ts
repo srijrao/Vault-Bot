@@ -176,8 +176,9 @@ export class CommandHandler {
             } else {
                 // Insert separator block that will follow the response, then stream response at start of current line
                 const insertionPos = currentLineStartPos;
-                const separatorWithNewline = '\n' + this.plugin.settings.chatSeparator + '\n';
-                editor.replaceRange(separatorWithNewline, insertionPos, insertionPos);
+                // Do not add extra newlines; the chat separator already contains spacing
+                const separatorOnly = this.plugin.settings.chatSeparator;
+                editor.replaceRange(separatorOnly, insertionPos, insertionPos);
                 responseStartPos = insertionPos;
             }
 
@@ -487,15 +488,17 @@ export class CommandHandler {
                     // Conversation mode: insert separator first at start of current line, then stream response above it
                     const cursor = editor.getCursor();
                     const currentLineStartPos = { line: cursor.line, ch: 0 };
-                    const separatorWithNewline = '\n' + this.plugin.settings.chatSeparator + '\n';
-                    editor.replaceRange(separatorWithNewline, currentLineStartPos, currentLineStartPos);
+                    // Do not add extra newlines; the chat separator already contains spacing
+                    const separatorOnly = this.plugin.settings.chatSeparator;
+                    editor.replaceRange(separatorOnly, currentLineStartPos, currentLineStartPos);
                     
                     // Calculate where the response should start (at the original line start position)
                     responseStartPos = currentLineStartPos; // Response goes at the start of the current line
                 } else if (!separatorMode) {
-                    // Selection mode: replace selection with query + separator
-                    editor.replaceSelection(initialContent);
-                    // Selection mode: insert at start of replaced text
+                    // Selection mode (Above): do NOT replace the selection.
+                    // Insert the chat separator at the selection start; stream the response before it.
+                    const sep = this.plugin.settings.chatSeparator;
+                    editor.replaceRange(sep, selectionStart, selectionStart);
                     responseStartPos = { line: selectionStart.line, ch: selectionStart.ch };
                 } else if (separatorMode && separatorLineIndex !== null) {
                     // Separator mode: insert before the separator line
@@ -522,8 +525,8 @@ export class CommandHandler {
                         // Keep cursor positioned after the response
                         editor.setCursor(lastInsertedEnd);
                     } else if (separatorMode) {
-                        // Separator mode: insert response with trailing newline
-                        const insertText = responseBuffer + '\n';
+                        // Separator mode: insert response (no extra trailing newline)
+                        const insertText = responseBuffer;
                         editor.replaceRange(insertText, responseStartPos, lastInsertedEnd);
                         lastInsertedEnd = this.calculateEndPosition(responseStartPos, insertText);
 
@@ -531,11 +534,10 @@ export class CommandHandler {
                         const afterQueryPos = this.calculateEndPosition({ line: (separatorLineIndex as number) + 1, ch: 0 }, editor.getLine((separatorLineIndex as number) + 1));
                         editor.setCursor(afterQueryPos);
                     } else {
-                        // Selection mode: replace the entire area
-                        const insertText = responseBuffer + '\n';
-                        editor.replaceRange(insertText, responseStartPos, editor.getCursor('from'));
-                        editor.setCursor(editor.getCursor('to'));
-                        lastInsertedEnd = this.calculateEndPosition(responseStartPos, insertText);
+                        // Selection mode (Above): stream the response before the inserted separator; do not alter the original selection
+                        editor.replaceRange(responseBuffer, responseStartPos, lastInsertedEnd);
+                        lastInsertedEnd = this.calculateEndPosition(responseStartPos, responseBuffer);
+                        editor.setCursor(lastInsertedEnd);
                     }
                 };
 

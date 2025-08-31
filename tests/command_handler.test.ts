@@ -205,8 +205,8 @@ describe('CommandHandler', () => {
         const callArgs = mockEditor.replaceRange.mock.calls[0];
         const insertedText = callArgs[0];
         const startPos = callArgs[1];
-        // Should have inserted the streamed response + newline
-        expect(insertedText).toBe('answer part\n');
+    // Should have inserted the streamed response without extra newline
+    expect(insertedText).toBe('answer part');
         // Start position should point at the start of the separator block (line 2)
         expect(startPos).toEqual({ line: 2, ch: 0 });
     });
@@ -481,9 +481,9 @@ describe('CommandHandler', () => {
 
             await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
 
-            // Verify separator was inserted at start of current line (line-based)
+            // Verify separator was inserted at start of current line (line-based) without extra newlines
             expect(mockEditor.replaceRange).toHaveBeenCalledWith(
-                '\n\n\n----\n\n\n',
+                plugin.settings.chatSeparator,
                 lineStartPos,
                 lineStartPos
             );
