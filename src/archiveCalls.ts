@@ -62,12 +62,30 @@ async function create7z(target7z: string, files: string[], baseDir: string): Pro
   await fs.promises.mkdir(path.dirname(target7z), { recursive: true });
   const tmp = `${target7z}.tmp-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 
-  // Prefer locally bundled 7za in bin/, fallback to package binary
+  // Prefer a locally bundled 7za in bin/ near the plugin, with multiple candidate locations, fallback to package binary
   let sevenZipPath = path7zaPkg;
   try {
-    const local = process.platform === 'win32' ? path.join(process.cwd(), 'bin', '7za.exe') : path.join(process.cwd(), 'bin', '7za');
-    const st = await statSafe(local);
-    if (st && st.isFile()) sevenZipPath = local;
+    const exe = process.platform === 'win32' ? '7za.exe' : '7za';
+    const pluginDir = path.dirname(baseDir); // ai-calls' parent is the plugin folder
+    const candidates: string[] = [];
+    // 1) Plugin folder bin
+    candidates.push(path.join(pluginDir, 'bin', exe));
+    // 2) Bundle directory bin (when running from built main.js)
+    if (typeof __dirname === 'string' && __dirname) {
+      candidates.push(path.join(__dirname, 'bin', exe));
+    }
+    // 3) CWD bin (useful in some test/dev runners)
+    candidates.push(path.join(process.cwd(), 'bin', exe));
+    // 4) A few ancestors of the plugin folder (handles tests that place bin/ at vault root)
+    let cur = path.resolve(pluginDir);
+    for (let i = 0; i < 4; i++) {
+      cur = path.dirname(cur);
+      candidates.push(path.join(cur, 'bin', exe));
+    }
+    for (const cand of candidates) {
+      const st = await statSafe(cand);
+      if (st?.isFile()) { sevenZipPath = cand; break; }
+    }
   } catch {}
 
   const rels = files.map(f => path.relative(baseDir, f));
@@ -79,6 +97,7 @@ async function create7z(target7z: string, files: string[], baseDir: string): Pro
       '-m0=lzma2',      // LZMA2 method
       '-ms=on',         // solid compression
       '-mmt=on',        // multithread
+      '-spf',           // use fully qualified paths safely
       '-y',             // assume yes
       tmp,
       ...rels
