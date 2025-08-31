@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, Notice, Modal } from 'obsidian';
 import { resolveAiCallsDir } from './recorder';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -128,25 +128,54 @@ export class VaultBotSettingTab extends PluginSettingTab {
 						this.display();
 					}
 				}))
-			.addButton(btn => btn
-				.setButtonText('Clear Files')
-				.onClick(async () => {
+			.addButton(btn => {
+				btn.setButtonText('Clear Files');
+				// Mark as destructive if API supports it; tolerate mocks without setWarning
+				( (btn as any).setWarning?.(true) );
+				btn.setTooltip('Deletes recorded AI call text files, with an option to also delete archives (.7z). Date folders are not removed.');
+				btn.onClick(async () => {
 					try {
+						const mode = await confirmDeletionMode(this.app);
+						if (!mode) { new Notice('Clear canceled'); return; }
+
 						const dir = resolveAiCallsDir((this as any).app);
 						const entries = await fs.promises.readdir(dir).catch(() => [] as string[]);
 						let removed = 0;
 						for (const name of entries) {
-							if (name.endsWith('.txt') || name.includes('vault-bot-')) {
+							const isTxt = name.endsWith('.txt') || name.includes('vault-bot-');
+							const isArchive = name.endsWith('.7z');
+							const isDateFolder = /^\d{4}-\d{2}-\d{2}$/.test(name);
+							if (mode === 'txt' && isTxt) {
 								await fs.promises.unlink(path.join(dir, name)).catch(() => {});
 								removed++;
+							} else if (mode === 'archives' && (isTxt || isArchive)) {
+								await fs.promises.unlink(path.join(dir, name)).catch(() => {});
+								removed++;
+							} else if (mode === 'everything') {
+								if (isTxt || isArchive) {
+									await fs.promises.unlink(path.join(dir, name)).catch(() => {});
+									removed++;
+								}
 							}
 						}
-						new Notice(`Removed ${removed} file(s).`);
+						// If 'everything', remove date folders too (exclude today)
+						if (mode === 'everything') {
+							const todayKey = new Date();
+							const pad = (n: number) => String(n).padStart(2, '0');
+							const todayFolder = `${todayKey.getFullYear()}-${pad(todayKey.getMonth() + 1)}-${pad(todayKey.getDate())}`;
+							for (const name of entries) {
+								if (/^\d{4}-\d{2}-\d{2}$/.test(name) && name !== todayFolder) {
+									await fs.promises.rm(path.join(dir, name), { recursive: true, force: true }).catch(() => {});
+								}
+							}
+						}
+						new Notice(`Removed ${removed} file(s) (${mode === 'everything' ? '.txt + archives + folders' : mode === 'archives' ? '.txt + archives' : '.txt only'})`);
 					} catch (e: any) {
 						this.lastRecordingError = e?.message || 'Clear failed';
 						this.display();
 					}
-				}))
+				});
+			})
 
 		new Setting(containerEl)
 			.setName('Archive AI calls now')
@@ -406,3 +435,37 @@ export class VaultBotSettingTab extends PluginSettingTab {
 		}
 	}
 }
+
+// Simple confirmation modal helper used before destructive actions
+class ConfirmClearModal extends Modal {
+  private resolver: (value: 'txt' | 'archives' | 'everything' | null) => void;
+  constructor(app: App, resolver: (value: 'txt' | 'archives' | 'everything' | null) => void) {
+    super(app);
+    this.resolver = resolver;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h3', { text: 'Clear Recorded AI Call Files' });
+    contentEl.createEl('p', { text: 'Choose what to delete:' });
+    const options = contentEl.createDiv({ cls: 'modal-button-container' });
+    const btn1 = options.createEl('button', { text: '1. .txt files only' });
+    const btn2 = options.createEl('button', { text: '2. .txt + .7z archives' });
+    const btn3 = options.createEl('button', { text: '3. .txt + .7z + date folders (excluding today)', cls: 'mod-warning' });
+    const cancel = options.createEl('button', { text: 'Cancel' });
+    btn1.addEventListener('click', () => { this.resolver('txt'); this.close(); });
+    btn2.addEventListener('click', () => { this.resolver('archives'); this.close(); });
+    btn3.addEventListener('click', () => { this.resolver('everything'); this.close(); });
+    cancel.addEventListener('click', () => { this.resolver(null); this.close(); });
+  }
+}
+
+// Confirmation helper: ask whether to delete only .txt, or .txt + archives, or everything
+function confirmDeletionMode(app: App): Promise<'txt' | 'archives' | 'everything' | null> {
+  return new Promise<'txt' | 'archives' | 'everything' | null>((resolve) => {
+    const modal = new ConfirmClearModal(app, resolve);
+    modal.open();
+  });
+}
+
+

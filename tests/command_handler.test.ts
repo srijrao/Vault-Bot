@@ -9,6 +9,18 @@ vi.mock('obsidian', () => ({
     PluginSettingTab: class {
         constructor(app: any, plugin: any) {}
     },
+    Modal: class {
+        app: any;
+        contentEl: any;
+        titleEl: any;
+        constructor(app: any) {
+            this.app = app;
+            this.contentEl = { createDiv: vi.fn() };
+            this.titleEl = { setText: vi.fn() };
+        }
+        open() {}
+        close() {}
+    },
 }));
 
 // Mock AI Provider Wrapper

@@ -31,6 +31,18 @@ vi.mock('obsidian', () => ({
     })),
     Notice: vi.fn(),
     App: vi.fn(),
+    Modal: class {
+        app: any;
+        contentEl: any;
+        titleEl: any;
+        constructor(app: any) {
+            this.app = app;
+            this.contentEl = { empty: vi.fn(), createEl: vi.fn(), createDiv: vi.fn() };
+            this.titleEl = { setText: vi.fn() };
+        }
+        open() {}
+        close() {}
+    },
 }));
 
 describe('VaultBotSettingTab API Key Validation', () => {

@@ -3,6 +3,74 @@ import { VaultBotSettingTab, DEFAULT_SETTINGS } from '../src/settings';
 import type { OpenAIProviderSettings, OpenRouterProviderSettings } from '../src/aiprovider';
 import VaultBotPlugin from '../main';
 
+// Mock Modal separately
+vi.mock('obsidian', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        PluginSettingTab: class {
+            app: any;
+            containerEl: any;
+            constructor(app: any, plugin: any) {
+                this.app = app;
+                this.containerEl = mockContainerEl;
+            }
+        },
+        Setting: vi.fn(() => {
+            const setting = { ...mockSetting };
+            setting.addText = vi.fn((callback) => {
+                callback(mockTextInput);
+                return setting;
+            });
+            setting.addTextArea = vi.fn((callback) => {
+                callback(mockTextInput);
+                return setting;
+            });
+            setting.addSlider = vi.fn((callback) => {
+                callback(mockSlider);
+                return setting;
+            });
+            setting.addDropdown = vi.fn((callback) => {
+                callback(mockDropdown);
+                return setting;
+            });
+            setting.addToggle = vi.fn((callback) => {
+                const toggle = { setValue: vi.fn().mockReturnThis(), onChange: vi.fn().mockReturnThis() };
+                callback(toggle);
+                return setting;
+            });
+            setting.addButton = vi.fn((callback) => {
+                callback(mockButton);
+                return setting;
+            });
+            return setting;
+        }),
+        Notice: mockNotice,
+        App: vi.fn(),
+        Modal: class {
+            app: any;
+            contentEl: any;
+            titleEl: any;
+            constructor(app: any) {
+                this.app = app;
+                this.contentEl = mockContainerEl;
+                this.titleEl = { setText: vi.fn() };
+            }
+            open() {}
+            close() {}
+        },
+        Component: class {},
+        TFile: class {},
+        TFolder: class {},
+        normalizePath: vi.fn((path) => path),
+        requestUrl: vi.fn(),
+        Platform: {
+            isDesktop: true,
+            isMobile: false,
+        },
+    };
+});
+
 // Mock AIProviderWrapper
 const mockValidateApiKey = vi.fn();
 vi.mock('../src/aiprovider', () => ({
@@ -59,6 +127,27 @@ vi.mock('obsidian', () => ({
     }),
     Notice: mockNotice,
     App: vi.fn(),
+    Modal: class {
+        app: any;
+        contentEl: any;
+        titleEl: any;
+        constructor(app: any) {
+            this.app = app;
+            this.contentEl = mockContainerEl;
+            this.titleEl = { setText: vi.fn() };
+        }
+        open() {}
+        close() {}
+    },
+    Component: class {},
+    TFile: class {},
+    TFolder: class {},
+    normalizePath: vi.fn((path) => path),
+    requestUrl: vi.fn(),
+    Platform: {
+        isDesktop: true,
+        isMobile: false,
+    },
 }));
 const mockSetting = {
     setName: vi.fn().mockReturnThis(),
