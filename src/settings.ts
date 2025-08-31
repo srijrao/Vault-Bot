@@ -8,6 +8,7 @@ import type { OpenAIProviderSettings, OpenRouterProviderSettings } from './aipro
 import type { AIProviderSettings } from './providers';
 import { AIProviderWrapper } from './aiprovider';
 import { zipOldAiCalls } from './archiveCalls';
+import { renderModelSettingsSection, type PluginLike } from './ui/model_settings_shared';
 
 export interface VaultBotPluginSettings {
 	apiProvider: string;
@@ -73,18 +74,8 @@ export class VaultBotSettingTab extends PluginSettingTab {
 				   .onClick(() => openAiBotConfigModal(this.plugin))
 			   );
 
-		new Setting(containerEl)
-			.setName('API Provider')
-			.setDesc('Select the AI provider to use.')
-			.addDropdown(dropdown => dropdown
-				.addOption('openai', 'OpenAI')
-				.addOption('openrouter', 'OpenRouter')
-				.setValue(this.plugin.settings.apiProvider)
-				.onChange(async (value) => {
-					this.plugin.settings.apiProvider = value;
-					this.debouncedSave();
-					this.display(); // Refresh the settings to show provider-specific options
-				}));
+		const saver = async () => { this.debouncedSave(); };
+		renderModelSettingsSection(containerEl, this.plugin as unknown as PluginLike, saver);
 
 		new Setting(containerEl)
 			.setName('API Key')
@@ -213,12 +204,7 @@ export class VaultBotSettingTab extends PluginSettingTab {
 					this.debouncedSave();
 				}));
 
-		// Show provider-specific settings
-		if (this.plugin.settings.apiProvider === 'openai') {
-			this.displayOpenAISettings(containerEl);
-		} else if (this.plugin.settings.apiProvider === 'openrouter') {
-			this.displayOpenRouterSettings(containerEl);
-		}
+		// Model settings section is already rendered above via shared section
 	}
 
 	/**
@@ -298,127 +284,7 @@ export class VaultBotSettingTab extends PluginSettingTab {
 		})()
 	}
 
-	private displayOpenAISettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'OpenAI Provider Settings' });
-
-		// Ensure the settings object for openai exists.
-		if (!this.plugin.settings.aiProviderSettings.openai) {
-			this.plugin.settings.aiProviderSettings.openai = {
-				api_key: '',
-				model: "gpt-4o",
-				system_prompt: "You are a helpful assistant.",
-				temperature: 1.0,
-			} as OpenAIProviderSettings;
-		}
-		const openaiSettings = this.plugin.settings.aiProviderSettings.openai as OpenAIProviderSettings;
-
-		new Setting(containerEl)
-			.setName('Model')
-			.setDesc('The model to use for generating responses.')
-			.addText(text => text
-				.setPlaceholder('e.g. gpt-4o')
-				.setValue(openaiSettings.model)
-				.onChange(async (value) => {
-					openaiSettings.model = value;
-					this.debouncedSave();
-				}));
-
-		new Setting(containerEl)
-			.setName('System Prompt')
-			.setDesc('The system prompt to use for the AI.')
-			.addTextArea(text => text
-				.setPlaceholder('You are a helpful assistant.')
-				.setValue(openaiSettings.system_prompt)
-				.onChange(async (value) => {
-					openaiSettings.system_prompt = value;
-					this.debouncedSave();
-				}));
-
-		new Setting(containerEl)
-			.setName('Temperature')
-			.setDesc('What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.')
-			.addSlider(slider => slider
-				.setLimits(0, 2, 0.1)
-				.setValue(openaiSettings.temperature)
-				.setDynamicTooltip()
-				.onChange(async (value) => {
-					openaiSettings.temperature = value;
-					this.debouncedSave();
-				}));
-	}
-
-	private displayOpenRouterSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'OpenRouter Provider Settings' });
-
-		// Ensure the settings object for openrouter exists.
-		if (!this.plugin.settings.aiProviderSettings.openrouter) {
-			this.plugin.settings.aiProviderSettings.openrouter = {
-				api_key: '',
-				model: "openai/gpt-4o",
-				system_prompt: "You are a helpful assistant.",
-				temperature: 1.0,
-				site_url: "",
-				site_name: "Obsidian Vault-Bot",
-			} as OpenRouterProviderSettings;
-		}
-		const openrouterSettings = this.plugin.settings.aiProviderSettings.openrouter as OpenRouterProviderSettings;
-
-		new Setting(containerEl)
-			.setName('Model')
-			.setDesc('The model to use for generating responses. Use format: provider/model (e.g., openai/gpt-4o)')
-			.addText(text => text
-				.setPlaceholder('e.g. openai/gpt-4o')
-				.setValue(openrouterSettings.model)
-				.onChange(async (value) => {
-					openrouterSettings.model = value;
-					this.debouncedSave();
-				}));
-
-		new Setting(containerEl)
-			.setName('System Prompt')
-			.setDesc('The system prompt to use for the AI.')
-			.addTextArea(text => text
-				.setPlaceholder('You are a helpful assistant.')
-				.setValue(openrouterSettings.system_prompt)
-				.onChange(async (value) => {
-					openrouterSettings.system_prompt = value;
-					this.debouncedSave();
-				}));
-
-		new Setting(containerEl)
-			.setName('Temperature')
-			.setDesc('What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.')
-			.addSlider(slider => slider
-				.setLimits(0, 2, 0.1)
-				.setValue(openrouterSettings.temperature)
-				.setDynamicTooltip()
-				.onChange(async (value) => {
-					openrouterSettings.temperature = value;
-					this.debouncedSave();
-				}));
-
-		new Setting(containerEl)
-			.setName('Site URL (Optional)')
-			.setDesc('Your site URL for OpenRouter analytics.')
-			.addText(text => text
-				.setPlaceholder('https://yoursite.com')
-				.setValue(openrouterSettings.site_url || '')
-				.onChange(async (value) => {
-					openrouterSettings.site_url = value;
-					this.debouncedSave();
-				}));
-
-		new Setting(containerEl)
-			.setName('Site Name (Optional)')
-			.setDesc('Your site name for OpenRouter analytics.')
-			.addText(text => text
-				.setPlaceholder('Your App Name')
-				.setValue(openrouterSettings.site_name || '')
-				.onChange(async (value) => {
-					openrouterSettings.site_name = value;
-					this.debouncedSave();
-				}));
-	}
+	// Removed provider-specific implementations in favor of shared renderer
 
 	private async testApiKey(): Promise<void> {
 		const currentProvider = this.plugin.settings.apiProvider;
