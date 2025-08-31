@@ -1,4 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice, Modal } from 'obsidian';
+import { openAiBotConfigModal } from './prompt_modal';
 import { resolveAiCallsDir } from './recorder';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -60,7 +61,17 @@ export class VaultBotSettingTab extends PluginSettingTab {
 	display(): void {
 		const {containerEl} = this;
 
-		containerEl.empty();
+		   containerEl.empty();
+
+		   // Button to open shared AI Bot configuration modal
+		   new Setting(containerEl)
+			   .setName('Configure AI Bot')
+			   .setDesc('Open the shared AI Bot configuration modal')
+			   .addButton(btn => btn
+				   .setButtonText('Open Modal')
+				   .setCta()
+				   .onClick(() => openAiBotConfigModal(this.plugin))
+			   );
 
 		new Setting(containerEl)
 			.setName('API Provider')

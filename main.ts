@@ -1,4 +1,5 @@
 import { Plugin, MarkdownView } from 'obsidian';
+import { openAiBotConfigModal } from './src/prompt_modal';
 import { CommandHandler } from './src/command_handler';
 import { zipOldAiCalls } from './src/archiveCalls';
 import { VaultBotPluginSettings, DEFAULT_SETTINGS, VaultBotSettingTab } from './src/settings';
@@ -35,9 +36,16 @@ export default class VaultBotPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'stop-response',
-			name: 'Stop Response',
-			checkCallback: (checking) => this.commandHandler.handleStopResponse(checking)
+		  id: 'stop-response',
+		  name: 'Stop Response',
+		  checkCallback: (checking) => this.commandHandler.handleStopResponse(checking)
+		});
+
+		// Add command to open AI Bot configuration modal
+		this.addCommand({
+		  id: 'open-ai-bot-config',
+		  name: 'Configure AI Bot',
+		  callback: () => openAiBotConfigModal(this)
 		});
 
 		this.addSettingTab(new VaultBotSettingTab(this.app, this));
