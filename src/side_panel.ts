@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf } from 'obsidian';
 import VaultBotPlugin from '../main';
 import type { VaultBotPluginSettings } from './settings';
 import { renderModelSettingsSection } from './ui/model_settings_shared';
+import { renderCoreConfigSection } from './ui/ai_bot_config_shared';
 
 export const AI_BOT_PANEL_VIEW_TYPE = 'ai-bot-panel';
 
@@ -30,12 +31,14 @@ export class AiBotSidePanel extends ItemView {
     async onOpen() {
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
-    this.renderModelSettings(container);
-    }
-
-    private renderModelSettings(container: HTMLElement) {
-    const saver = async () => { await this.plugin.saveSettings(); };
-    renderModelSettingsSection(container, this.plugin, saver);
+        
+        const saver = async () => { await this.plugin.saveSettings(); };
+        
+        // Render core configuration section
+        renderCoreConfigSection(container, this.plugin, saver);
+        
+        // Render model settings section
+        renderModelSettingsSection(container, this.plugin, saver);
     }
 
     async onClose() {

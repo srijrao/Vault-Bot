@@ -9,6 +9,7 @@ import type { AIProviderSettings } from './providers';
 import { AIProviderWrapper } from './aiprovider';
 import { zipOldAiCalls } from './archiveCalls';
 import { renderModelSettingsSection, type PluginLike } from './ui/model_settings_shared';
+import { renderCoreConfigSection } from './ui/ai_bot_config_shared';
 
 export interface VaultBotPluginSettings {
 	apiProvider: string;
@@ -64,36 +65,25 @@ export class VaultBotSettingTab extends PluginSettingTab {
 
 		   containerEl.empty();
 
-		   // Button to open shared AI Bot configuration modal
-		   new Setting(containerEl)
-			   .setName('Configure AI Bot')
-			   .setDesc('Open the shared AI Bot configuration modal')
-			   .addButton(btn => btn
-				   .setButtonText('Open Modal')
-				   .setCta()
-				   .onClick(() => openAiBotConfigModal(this.plugin))
-			   );
+		   // Main header for the plugin settings
+		   containerEl.createEl('h1', { text: 'Vault Bot' });
 
 		const saver = async () => { this.debouncedSave(); };
-		renderModelSettingsSection(containerEl, this.plugin as unknown as PluginLike, saver);
+		
+		// Create separate containers for each shared section
+		const coreConfigContainer = containerEl.createDiv();
+		const modelSettingsContainer = containerEl.createDiv();
+		
+		// Render shared core configuration section
+		renderCoreConfigSection(coreConfigContainer, this.plugin as unknown as PluginLike, saver);
+		
+		// Render shared model settings section
+		renderModelSettingsSection(modelSettingsContainer, this.plugin as unknown as PluginLike, saver);
 
+		// Settings-specific: API Key test button (add after the shared API key field)
 		new Setting(containerEl)
-			.setName('API Key')
-			.setDesc(`Your API key for ${this.plugin.settings.apiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'}.`)
-			.addText(text => {
-				const currentProvider = this.plugin.settings.apiProvider;
-				const currentSettings = this.plugin.settings.aiProviderSettings[currentProvider];
-				text
-					.setPlaceholder('Enter your API key')
-					.setValue(currentSettings?.api_key || '')
-					.onChange(async (value) => {
-						if (currentSettings) {
-							currentSettings.api_key = value;
-							this.debouncedSave();
-						}
-					});
-				text.inputEl.type = 'password';
-			})
+			.setName('Test API Key')
+			.setDesc('Verify that your API key is valid and working.')
 			.addButton(button => {
 				button
 					.setButtonText('Test API Key')
@@ -102,16 +92,6 @@ export class VaultBotSettingTab extends PluginSettingTab {
 						await this.testApiKey();
 					});
 			});
-
-		new Setting(containerEl)
-			.setName('Record chat AI calls')
-			.setDesc('May record sensitive chat content. Do not enable if you store private data you do not want on disk.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.recordApiCalls)
-				.onChange(async (value) => {
-					this.plugin.settings.recordApiCalls = value;
-					this.debouncedSave();
-				}))
 
 		new Setting(containerEl)
 			.setName('AI call records folder')
@@ -191,17 +171,6 @@ export class VaultBotSettingTab extends PluginSettingTab {
 					} catch (e) {
 						console.error('Manual archive failed', e);
 					}
-				}));
-
-		new Setting(containerEl)
-			.setName('Chat Separator')
-			.setDesc('The separator used to distinguish between messages in a chat.')
-			.addText(text => text
-				.setPlaceholder('e.g. ---')
-				.setValue(this.plugin.settings.chatSeparator)
-				.onChange(async (value) => {
-					this.plugin.settings.chatSeparator = value;
-					this.debouncedSave();
 				}));
 
 		// Model settings section is already rendered above via shared section
