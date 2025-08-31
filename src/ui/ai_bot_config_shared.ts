@@ -57,7 +57,7 @@ export function renderApiProviderSelector(
     });
 }
 
-// Renders the API Key input field for the current provider
+// Renders the API Key input fields for all providers
 export function renderApiKeyField(
   container: HTMLElement,
   plugin: PluginLike,
@@ -66,18 +66,38 @@ export function renderApiKeyField(
   ensureProviderDefaults(plugin.settings);
   
   const currentProvider = plugin.settings.apiProvider;
-  const currentSettings = plugin.settings.aiProviderSettings[currentProvider];
   
+  // Render API key field for OpenAI
+  const openaiSettings = plugin.settings.aiProviderSettings.openai;
   new Setting(container)
-    .setName('API Key')
-    .setDesc(`Your API key for ${currentProvider === 'openai' ? 'OpenAI' : 'OpenRouter'}.`)
+    .setName('OpenAI API Key')
+    .setDesc(`Your API key for OpenAI.${currentProvider === 'openai' ? ' (Currently Active)' : ''}`)
     .addText(text => {
       text
-        .setPlaceholder('Enter your API key')
-        .setValue(currentSettings?.api_key || '')
+        .setPlaceholder('Enter your OpenAI API key')
+        .setValue(openaiSettings?.api_key || '')
         .onChange(async (value) => {
-          if (currentSettings) {
-            currentSettings.api_key = value;
+          if (openaiSettings) {
+            openaiSettings.api_key = value;
+            await save();
+          }
+        });
+      text.inputEl.type = 'password';
+      return text;
+    });
+
+  // Render API key field for OpenRouter
+  const openrouterSettings = plugin.settings.aiProviderSettings.openrouter;
+  new Setting(container)
+    .setName('OpenRouter API Key')
+    .setDesc(`Your API key for OpenRouter.${currentProvider === 'openrouter' ? ' (Currently Active)' : ''}`)
+    .addText(text => {
+      text
+        .setPlaceholder('Enter your OpenRouter API key')
+        .setValue(openrouterSettings?.api_key || '')
+        .onChange(async (value) => {
+          if (openrouterSettings) {
+            openrouterSettings.api_key = value;
             await save();
           }
         });

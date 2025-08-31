@@ -19,6 +19,7 @@ const settingsContainer = {
     if (tag === 'h2' && opts?.text) headers.settings.push(opts.text);
     return settingsContainer;
   }),
+  createDiv: vi.fn(() => settingsContainer),
   empty: vi.fn(() => { emptyCounts.settings += 1; }),
 };
 
@@ -27,6 +28,7 @@ const sideContainer = {
     if (tag === 'h2' && opts?.text) headers.side.push(opts.text);
     return sideContainer;
   }),
+  createDiv: vi.fn(() => sideContainer),
   empty: vi.fn(() => { emptyCounts.side += 1; }),
 };
 
@@ -173,6 +175,8 @@ describe('Shared Model Settings UI parity', () => {
     const panel = new AiBotSidePanel({} as any, plugin);
     panel.onOpen();
 
+    expect(headers.settings).toContain('AI Bot Configuration');
+    expect(headers.side).toContain('AI Bot Configuration');
     expect(headers.settings).toContain('AI Bot Model Settings');
     expect(headers.side).toContain('AI Bot Model Settings');
   });
@@ -189,7 +193,7 @@ describe('Shared Model Settings UI parity', () => {
     const panel = new AiBotSidePanel({} as any, plugin);
     panel.onOpen();
 
-    const expected = ['Provider', 'Model', 'System Prompt', 'Temperature'];
+    const expected = ['API Provider', 'OpenAI API Key', 'OpenRouter API Key', 'Record chat AI calls', 'Chat Separator', 'Provider', 'Model', 'System Prompt', 'Temperature'];
     expected.forEach((name) => {
       expect(fieldNames.settings).toContain(name);
       expect(fieldNames.side).toContain(name);
@@ -208,7 +212,7 @@ describe('Shared Model Settings UI parity', () => {
     const panel = new AiBotSidePanel({} as any, plugin);
     panel.onOpen();
 
-    const expected = ['Provider', 'Model', 'System Prompt', 'Temperature', 'Site URL (Optional)', 'Site Name (Optional)'];
+    const expected = ['API Provider', 'OpenAI API Key', 'OpenRouter API Key', 'Record chat AI calls', 'Chat Separator', 'Provider', 'Model', 'System Prompt', 'Temperature', 'Site URL (Optional)', 'Site Name (Optional)'];
     expected.forEach((name) => {
       expect(fieldNames.settings).toContain(name);
       expect(fieldNames.side).toContain(name);

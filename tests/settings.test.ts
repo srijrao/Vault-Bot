@@ -5,6 +5,7 @@ import type VaultBotPlugin from '../main';
 // Define mocks for UI components that will be used across tests FIRST so the module mock can close over them
 const mockContainerEl = {
     createEl: vi.fn(() => mockContainerEl),
+    createDiv: vi.fn(() => mockContainerEl),
     setText: vi.fn(),
     empty: vi.fn(),
 };
@@ -158,9 +159,11 @@ describe('VaultBotSettingTab', () => {
     expect((obsidian as any).Setting).toHaveBeenCalled(); 
     });
 
-    it('should set up API Key setting correctly', () => {
+    it('should set up API Key settings correctly for both providers', () => {
         settingTab.display();
+        // Should set up both OpenAI and OpenRouter API key fields
         expect(mockTextInput.setValue).toHaveBeenCalledWith('default-openai-key');
+        expect(mockTextInput.setValue).toHaveBeenCalledWith(''); // OpenRouter has empty default
     });
 
     it('should set up temperature slider correctly', () => {
