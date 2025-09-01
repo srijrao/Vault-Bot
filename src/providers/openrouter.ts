@@ -1,6 +1,6 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { streamText } from 'ai';
-import { AIProvider, AIProviderSettings, AIMessage } from './base';
+import { AIProvider, AIProviderSettings, AIMessage, ModelInfo } from './base';
 
 export interface OpenRouterProviderSettings extends AIProviderSettings {
     api_key: string;
@@ -104,6 +104,44 @@ export class OpenRouterProvider implements AIProvider {
         } catch (error: any) {
             console.error('OpenRouter API key validation failed:', error);
             return { valid: false, error: error.message || 'Network error occurred' };
+        }
+    }
+
+    async listModels(): Promise<ModelInfo[]> {
+        try {
+            const response = await fetch('https://openrouter.ai/api/v1/models', {
+                method: 'GET',
+                headers: {
+                    'HTTP-Referer': this.settings.site_url || 'https://obsidian.md',
+                    'X-Title': this.settings.site_name || 'Obsidian Vault-Bot'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.data.map((model: any) => ({
+                id: model.id,
+                name: model.name || model.id,
+                description: model.description || `${model.id}`,
+                context_length: model.context_length || model.top_provider?.context_length,
+                pricing: {
+                    prompt: model.pricing?.prompt,
+                    completion: model.pricing?.completion
+                }
+            })).sort((a: ModelInfo, b: ModelInfo) => a.name.localeCompare(b.name));
+        } catch (error: any) {
+            console.error('Failed to fetch OpenRouter models:', error);
+            // Return a fallback list of popular models
+            return [
+                { id: 'openai/gpt-4o', name: 'GPT-4o', description: 'OpenAI GPT-4 Omni via OpenRouter', context_length: 128000 },
+                { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', description: 'OpenAI GPT-4 Omni Mini via OpenRouter', context_length: 128000 },
+                { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Anthropic Claude 3.5 Sonnet via OpenRouter', context_length: 200000 },
+                { id: 'google/gemini-pro', name: 'Gemini Pro', description: 'Google Gemini Pro via OpenRouter', context_length: 32768 },
+                { id: 'meta-llama/llama-3.2-90b-vision-instruct', name: 'Llama 3.2 90B Vision', description: 'Meta Llama 3.2 90B Vision via OpenRouter', context_length: 128000 }
+            ];
         }
     }
 }

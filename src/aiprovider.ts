@@ -4,12 +4,13 @@ import {
     OpenAIProvider, 
     OpenRouterProvider, 
     AIMessage,
+    ModelInfo,
     type OpenAIProviderSettings, 
     type OpenRouterProviderSettings 
 } from "./providers";
 
 export type ProviderType = 'openai' | 'openrouter';
-export type { AIMessage };
+export type { AIMessage, ModelInfo };
 
 export class AIProviderWrapper {
     private settings: VaultBotPluginSettings;
@@ -47,6 +48,10 @@ export class AIProviderWrapper {
         // Prepend system prompt if it doesn't already exist and system prompt is configured
         const messagesWithSystemPrompt = this.prependSystemPrompt(messages);
         return this.provider.getStreamingResponseWithConversation(messagesWithSystemPrompt, onUpdate, signal);
+    }
+
+    async listModels(): Promise<ModelInfo[]> {
+        return this.provider.listModels();
     }
 
     private normalizeToMessages(prompt: string): AIMessage[] {

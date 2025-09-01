@@ -21,6 +21,18 @@ vi.mock('obsidian', () => ({
         open() {}
         close() {}
     },
+    FuzzySuggestModal: class MockFuzzySuggestModal {
+        constructor(public app: any) {}
+        open() {}
+        close() {}
+        onOpen() {}
+        onClose() {}
+        setPlaceholder() {}
+        getItems() { return []; }
+        getItemText() { return ''; }
+        onChooseItem() {}
+        renderSuggestion() {}
+    },
 }));
 
 // Mock AI Provider Wrapper

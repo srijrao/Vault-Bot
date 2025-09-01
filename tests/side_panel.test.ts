@@ -102,6 +102,18 @@ vi.mock('obsidian', () => ({
         return setting;
     }),
     Notice: vi.fn(),
+    FuzzySuggestModal: class MockFuzzySuggestModal {
+        constructor(public app: any) {}
+        open() {}
+        close() {}
+        onOpen() {}
+        onClose() {}
+        setPlaceholder() {}
+        getItems() { return []; }
+        getItemText() { return ''; }
+        onChooseItem() {}
+        renderSuggestion() {}
+    },
 }));
 
 describe('AiBotSidePanel', () => {

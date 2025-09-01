@@ -8,6 +8,11 @@ const mockContainerEl = {
     createDiv: vi.fn(() => mockContainerEl),
     setText: vi.fn(),
     empty: vi.fn(),
+    style: {},
+    classList: { add: vi.fn(), remove: vi.fn() },
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    click: vi.fn(),
 };
 
 const mockTextInput = {
@@ -51,6 +56,18 @@ vi.mock('obsidian', async (importOriginal) => {
             onOpen() {}
             onClose() {}
         },
+        FuzzySuggestModal: class MockFuzzySuggestModal {
+            constructor(public app: any) {}
+            open() {}
+            close() {}
+            onOpen() {}
+            onClose() {}
+            setPlaceholder() {}
+            getItems() { return []; }
+            getItemText() { return ''; }
+            onChooseItem() {}
+            renderSuggestion() {}
+        },
         PluginSettingTab: class {
             app: any;
             containerEl: any;
@@ -63,6 +80,7 @@ vi.mock('obsidian', async (importOriginal) => {
             const setting = {
                 setName: vi.fn().mockReturnThis(),
                 setDesc: vi.fn().mockReturnThis(),
+                controlEl: mockContainerEl, // Add controlEl for new model selector
                 addText: vi.fn((callback: any) => { callback(mockTextInput); return setting; }),
                 addTextArea: vi.fn((callback: any) => { callback(mockTextInput); return setting; }),
                 addSlider: vi.fn((callback: any) => { callback(mockSlider); return setting; }),

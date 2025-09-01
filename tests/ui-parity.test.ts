@@ -21,6 +21,11 @@ const settingsContainer = {
   }),
   createDiv: vi.fn(() => settingsContainer),
   empty: vi.fn(() => { emptyCounts.settings += 1; }),
+  style: {},
+  classList: { add: vi.fn(), remove: vi.fn() },
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  click: vi.fn(),
 };
 
 const sideContainer = {
@@ -30,6 +35,11 @@ const sideContainer = {
   }),
   createDiv: vi.fn(() => sideContainer),
   empty: vi.fn(() => { emptyCounts.side += 1; }),
+  style: {},
+  classList: { add: vi.fn(), remove: vi.fn() },
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  click: vi.fn(),
 };
 
 // Create a combined obsidian mock that can satisfy both settings.ts and side_panel.ts
@@ -56,6 +66,7 @@ vi.mock('obsidian', () => {
     const setting = {
       setName: vi.fn((name: string) => { fieldNames[activeCtx].push(name); return setting; }),
       setDesc: vi.fn(() => setting),
+      controlEl: activeCtx === 'settings' ? settingsContainer : sideContainer, // Add controlEl for new model selector
       addText: vi.fn((cb: any) => {
         const text = {
           setPlaceholder: vi.fn().mockReturnThis(),
@@ -123,7 +134,19 @@ vi.mock('obsidian', () => {
     PluginSettingTab: MockPluginSettingTab,
     Setting,
     Notice: vi.fn(),
-  Modal: class { constructor(public app?: any) {} open() {} close() {} onOpen() {} onClose() {} },
+    Modal: class { constructor(public app?: any) {} open() {} close() {} onOpen() {} onClose() {} },
+    FuzzySuggestModal: class MockFuzzySuggestModal {
+      constructor(public app: any) {}
+      open() {}
+      close() {}
+      onOpen() {}
+      onClose() {}
+      setPlaceholder() {}
+      getItems() { return []; }
+      getItemText() { return ''; }
+      onChooseItem() {}
+      renderSuggestion() {}
+    },
   } as any;
 });
 
