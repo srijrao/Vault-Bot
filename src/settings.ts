@@ -256,28 +256,63 @@ export class VaultBotSettingTab extends PluginSettingTab {
 	// Removed provider-specific implementations in favor of shared renderer
 
 	private async testApiKey(): Promise<void> {
-		const currentProvider = this.plugin.settings.apiProvider;
-		const currentSettings = this.plugin.settings.aiProviderSettings[currentProvider];
+		const allProviders = Object.keys(this.plugin.settings.aiProviderSettings);
+		const providersWithKeys = allProviders.filter(provider => 
+			this.plugin.settings.aiProviderSettings[provider]?.api_key
+		);
 		
-		if (!currentSettings?.api_key) {
-			new Notice('Please enter an API key first');
+		if (providersWithKeys.length === 0) {
+			new Notice('Please enter at least one API key first');
 			return;
 		}
 
-		new Notice('Testing API key...');
+		new Notice(`Testing ${providersWithKeys.length} API key(s)...`);
 		
-		try {
-			const providerWrapper = new AIProviderWrapper(this.plugin.settings);
-			const result = await providerWrapper.validateApiKey();
-			
-			if (result.valid) {
-				new Notice('✅ API key is valid!');
-			} else {
-				new Notice(`❌ API key validation failed: ${result.error}`);
+		const results: Array<{provider: string, valid: boolean, error?: string}> = [];
+		
+		for (const provider of providersWithKeys) {
+			try {
+				// Create a temporary settings object with the provider we want to test
+				const tempSettings = {
+					...this.plugin.settings,
+					apiProvider: provider
+				};
+				
+				const providerWrapper = new AIProviderWrapper(tempSettings);
+				const result = await providerWrapper.validateApiKey();
+				
+				results.push({
+					provider,
+					valid: result.valid,
+					error: result.error
+				});
+			} catch (error: any) {
+				console.error(`Error testing ${provider} API key:`, error);
+				results.push({
+					provider,
+					valid: false,
+					error: error.message
+				});
 			}
-		} catch (error: any) {
-			console.error('Error testing API key:', error);
-			new Notice(`❌ Error testing API key: ${error.message}`);
+		}
+		
+		// Show results
+		const validKeys = results.filter(r => r.valid);
+		const invalidKeys = results.filter(r => !r.valid);
+		
+		if (invalidKeys.length === 0) {
+			new Notice(`✅ All ${validKeys.length} API key(s) are valid!`);
+		} else {
+			const validProviders = validKeys.map(r => r.provider).join(', ');
+			const invalidProviders = invalidKeys.map(r => `${r.provider} (${r.error})`).join(', ');
+			
+			let message = '';
+			if (validKeys.length > 0) {
+				message += `✅ Valid: ${validProviders}. `;
+			}
+			message += `❌ Invalid: ${invalidProviders}`;
+			
+			new Notice(message, 8000); // Show for 8 seconds for longer messages
 		}
 	}
 }

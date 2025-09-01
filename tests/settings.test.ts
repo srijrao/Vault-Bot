@@ -180,12 +180,18 @@ describe('VaultBotSettingTab', () => {
         expect((plugin.settings.aiProviderSettings.openai as OpenAIProviderSettings).model).toBe('gpt-4o');
     });
 
-    it('should test API key validation functionality exists', async () => {
+    it('should test API key validation functionality exists and tests all providers', async () => {
+        // Set up multiple providers with API keys
+        plugin.settings.aiProviderSettings.openai.api_key = 'openai-test-key';
+        (plugin.settings.aiProviderSettings.openrouter as OpenRouterProviderSettings).api_key = 'openrouter-test-key';
+        
         settingTab.display();
         const validateBtn = getButtonByText('Test API Key');
         expect(validateBtn?.onClick).toBeDefined();
         await validateBtn?.onClick?.();
-        expect(mockValidateApiKey).toHaveBeenCalled();
+        
+        // Should be called twice for both providers
+        expect(mockValidateApiKey).toHaveBeenCalledTimes(2);
     });
 
     it('should wire Archive AI calls now button to call zipOldAiCalls', async () => {

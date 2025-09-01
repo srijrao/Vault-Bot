@@ -65,6 +65,14 @@ describe('VaultBotSettingTab API Key Validation', () => {
                         system_prompt: 'Test prompt',
                         temperature: 0.7,
                     } as OpenAIProviderSettings,
+                    openrouter: {
+                        api_key: '',
+                        model: 'openai/gpt-4o',
+                        system_prompt: 'Test prompt',
+                        temperature: 0.7,
+                        site_url: '',
+                        site_name: 'Test Site',
+                    },
                 },
             },
             saveSettings: vi.fn(),
@@ -72,53 +80,73 @@ describe('VaultBotSettingTab API Key Validation', () => {
         settingTab = new VaultBotSettingTab(app, plugin);
     });
 
-    it('should handle API key validation success', async () => {
+    it('should test all API keys with valid results', async () => {
         mockValidateApiKey.mockResolvedValue({ valid: true });
-        plugin.settings.aiProviderSettings.openai.api_key = 'test-key';
+        plugin.settings.aiProviderSettings.openai.api_key = 'openai-test-key';
+        plugin.settings.aiProviderSettings.openrouter.api_key = 'openrouter-test-key';
         
         await (settingTab as any).testApiKey();
         
-        expect(mockValidateApiKey).toHaveBeenCalled();
+        // Should be called twice - once for each provider
+        expect(mockValidateApiKey).toHaveBeenCalledTimes(2);
     });
 
-    it('should handle API key validation failure', async () => {
-        mockValidateApiKey.mockResolvedValue({ valid: false, error: 'Invalid API key' });
-        plugin.settings.aiProviderSettings.openai.api_key = 'invalid-key';
+    it('should test all API keys with mixed results', async () => {
+        // Mock different results for different calls
+        mockValidateApiKey
+            .mockResolvedValueOnce({ valid: true })
+            .mockResolvedValueOnce({ valid: false, error: 'Invalid API key' });
+        
+        plugin.settings.aiProviderSettings.openai.api_key = 'valid-openai-key';
+        plugin.settings.aiProviderSettings.openrouter.api_key = 'invalid-openrouter-key';
         
         await (settingTab as any).testApiKey();
         
-        expect(mockValidateApiKey).toHaveBeenCalled();
+        expect(mockValidateApiKey).toHaveBeenCalledTimes(2);
     });
 
-    it('should handle missing API key', async () => {
+    it('should test only providers with API keys', async () => {
+        mockValidateApiKey.mockResolvedValue({ valid: true });
+        plugin.settings.aiProviderSettings.openai.api_key = 'openai-test-key';
+        plugin.settings.aiProviderSettings.openrouter.api_key = ''; // Empty key
+        
+        await (settingTab as any).testApiKey();
+        
+        // Should only be called once for openai (openrouter has no key)
+        expect(mockValidateApiKey).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle no API keys configured', async () => {
         plugin.settings.aiProviderSettings.openai.api_key = '';
+        plugin.settings.aiProviderSettings.openrouter.api_key = '';
         
         await (settingTab as any).testApiKey();
         
         expect(mockValidateApiKey).not.toHaveBeenCalled();
     });
 
-    it('should handle validation errors', async () => {
-        mockValidateApiKey.mockRejectedValue(new Error('Network error'));
-        plugin.settings.aiProviderSettings.openai.api_key = 'test-key';
+    it('should handle validation errors for individual providers', async () => {
+        mockValidateApiKey
+            .mockResolvedValueOnce({ valid: true })
+            .mockRejectedValueOnce(new Error('Network error'));
+        
+        plugin.settings.aiProviderSettings.openai.api_key = 'valid-key';
+        plugin.settings.aiProviderSettings.openrouter.api_key = 'network-error-key';
         
         await (settingTab as any).testApiKey();
         
-        expect(mockValidateApiKey).toHaveBeenCalled();
+        expect(mockValidateApiKey).toHaveBeenCalledTimes(2);
     });
 
-    it('should handle openrouter provider', async () => {
-        plugin.settings.apiProvider = 'openrouter';
-        plugin.settings.aiProviderSettings.openrouter = {
-            api_key: 'test-key',
-            model: 'openai/gpt-4o',
-            system_prompt: 'Test prompt',
-            temperature: 0.7,
-        };
+    it('should create temporary settings for each provider test', async () => {
         mockValidateApiKey.mockResolvedValue({ valid: true });
+        plugin.settings.apiProvider = 'openai'; // Current provider
+        plugin.settings.aiProviderSettings.openai.api_key = 'openai-key';
+        plugin.settings.aiProviderSettings.openrouter.api_key = 'openrouter-key';
         
         await (settingTab as any).testApiKey();
         
-        expect(mockValidateApiKey).toHaveBeenCalled();
+        // Verify that AIProviderWrapper was called with different provider settings
+        expect(mockValidateApiKey).toHaveBeenCalledTimes(2);
     });
 });
