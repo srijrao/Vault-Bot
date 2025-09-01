@@ -6,3 +6,70 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+/* Vault-Bot Plugin Specific Styles - Scoped to avoid conflicts */
+.vault-bot-model-control-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vault-bot-model-dropdown-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vault-bot-model-dropdown-row select {
+  flex: 1;
+  min-width: 100px;
+  max-width: 150px;
+}
+
+.vault-bot-model-button-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  justify-content: center;
+}
+
+.vault-bot-model-button-row button {
+  /*height: 20px;*/
+  padding: 0 8px;
+  /*font-size: 16px;*/
+}
+
+.vault-bot-model-input-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vault-bot-model-input-row input[type="text"] {
+  flex: 1;
+  min-width: 100px;
+  max-width: 150px;
+}
+
+/* Responsive behavior for narrow containers */
+@media (max-width: 400px) {
+  .vault-bot-model-dropdown-row,
+  .vault-bot-model-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .vault-bot-model-dropdown-row select,
+  .vault-bot-model-input-row input[type="text"] {
+    width: 100%;
+    min-width: unset;
+  }
+  
+  .vault-bot-model-button-row {
+    justify-content: center;
+  }
+}

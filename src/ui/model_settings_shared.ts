@@ -97,22 +97,25 @@ function renderModelSelector(
     .setName('Model')
     .setDesc(`Select a ${providerName} model`);
 
-  // Create container for dropdown and buttons
-  const controlContainer = setting.controlEl.createDiv({ cls: 'model-control-container' });
+  // Create container for dropdown and buttons with responsive layout
+  const controlContainer = setting.controlEl.createDiv({ cls: 'vault-bot-model-control-container' });
 
-  const dropdown = controlContainer.createEl('select', { cls: 'dropdown' });
-  dropdown.style.marginRight = '8px';
-  dropdown.style.minWidth = '200px';
+  // Create top row for dropdown
+  const dropdownRow = controlContainer.createDiv({ cls: 'vault-bot-model-dropdown-row' });
+
+  const dropdown = dropdownRow.createEl('select', { cls: 'dropdown' });
+
+  // Create button row for search and refresh buttons
+  const buttonRow = controlContainer.createDiv({ cls: 'vault-bot-model-button-row' });
 
   // Create search button for fuzzy search
-  const searchButton = controlContainer.createEl('button', {
+  const searchButton = buttonRow.createEl('button', {
     text: '🔍 Search',
     cls: 'mod-cta'
   });
-  searchButton.style.marginRight = '8px';
 
   // Create refresh button
-  const refreshButton = controlContainer.createEl('button', {
+  const refreshButton = buttonRow.createEl('button', {
     text: '🔄',
     title: 'Refresh models'
   });
@@ -133,12 +136,6 @@ function renderModelSelector(
         text: loadingModels ? '⏳ Loading models...' : '❌ Failed to load models' 
       });
     } else {
-      // Add separator
-      const separatorOption = dropdown.createEl('option', { 
-        value: '__separator__', 
-        text: '──────────────' 
-      });
-      separatorOption.disabled = true;
       
       // Add model options
       modelList.forEach(model => {
@@ -160,15 +157,19 @@ function renderModelSelector(
   // Function to show manual input
   const showManualInput = () => {
     controlContainer.empty();
-    const textInput = controlContainer.createEl('input', { 
+    
+    // Recreate the layout structure for manual input
+    const inputRow = controlContainer.createDiv({ cls: 'vault-bot-model-input-row' });
+    
+    const textInput = inputRow.createEl('input', { 
       type: 'text',
       value: providerSettings.model,
       placeholder: `e.g. ${providerName === 'OpenAI' ? 'gpt-4o' : 'openai/gpt-4o'}`
     });
-    textInput.style.marginRight = '8px';
-    textInput.style.minWidth = '200px';
 
-    const backButton = controlContainer.createEl('button', {
+    const buttonRow = controlContainer.createDiv({ cls: 'vault-bot-model-button-row' });
+
+    const backButton = buttonRow.createEl('button', {
       text: '← Back to dropdown'
     });
 
@@ -179,9 +180,15 @@ function renderModelSelector(
 
     backButton.addEventListener('click', () => {
       controlContainer.empty();
-      controlContainer.appendChild(dropdown);
-      controlContainer.appendChild(searchButton);
-      controlContainer.appendChild(refreshButton);
+      
+      // Recreate the original layout
+      const dropdownRow = controlContainer.createDiv({ cls: 'vault-bot-model-dropdown-row' });
+      dropdownRow.appendChild(dropdown);
+      
+      const buttonRow = controlContainer.createDiv({ cls: 'vault-bot-model-button-row' });
+      buttonRow.appendChild(searchButton);
+      buttonRow.appendChild(refreshButton);
+      
       populateDropdown(models, providerSettings.model);
     });
 
