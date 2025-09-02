@@ -35,6 +35,15 @@ vi.mock('obsidian', () => {
         return this;
       }
 
+      addToggle(callback: (toggle: any) => any) {
+        const toggle = {
+          setValue: vi.fn().mockReturnThis(),
+          onChange: vi.fn().mockReturnThis(),
+        };
+        callback(toggle);
+        return this;
+      }
+
       addTextArea(callback: (textarea: any) => any) {
         const textarea = {
           setPlaceholder: vi.fn().mockReturnThis(),

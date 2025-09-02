@@ -70,16 +70,40 @@ Implement automatic prepending of current date and time with UTC offset to all s
 - 2025-09-02 10:55:00 Added comprehensive tests for toggle functionality
 - 2025-09-02 10:55:25 All tests passing (22/22 AIProvider tests)
 
+### API Call Recording Issue Discovery
+- 2025-09-02 11:30:00 User discovered that archived API calls don't show actual system messages with datetime
+- 2025-09-02 11:32:15 Identified bug: Recording system reconstructs messages from raw settings instead of capturing actual sent messages
+- 2025-09-02 11:35:30 Analysis shows CommandHandler records `cfgAny.system_prompt` instead of processed `provider.getSystemPrompt()`
+- 2025-09-02 11:40:00 Architectural issue: Recording happens downstream after AI call, should happen upstream during message construction
+
+### API Call Recording Fix Implementation
+- 2025-09-02 11:45:00 Made getSystemPrompt() public in AIProviderWrapper for recording access
+- 2025-09-02 11:46:15 Updated CommandHandler recording logic to use provider.getSystemPrompt() instead of raw settings
+- 2025-09-02 11:47:30 Modified buildConversationMessages to accept provider parameter for proper system prompt handling
+- 2025-09-02 11:48:45 Fixed all three recording locations in CommandHandler (handleGetResponseBelow, handleGetResponseAbove, handleDirectionalConversation)
+
+### Proper Upstream Recording Implementation
+- 2025-09-02 12:00:00 Added RecordingCallback type and upstream recording architecture to AIProviderWrapper
+- 2025-09-02 12:01:30 Modified getStreamingResponse and getStreamingResponseWithConversation to accept recording callbacks
+- 2025-09-02 12:02:45 Implemented message capture at construction time in prependSystemPrompt flow
+- 2025-09-02 12:04:00 Updated all CommandHandler functions to use upstream recording callbacks instead of downstream reconstruction
+- 2025-09-02 12:05:15 Eliminated all raw settings reconstruction - now captures exact messages sent to AI providers
+- 2025-09-02 12:06:30 Build successful and development server running with new upstream recording architecture
+
 ### Files Changed
-- src/aiprovider.ts - Added getCurrentDateTimeString utility and modified getSystemPrompt with toggle logic
+- src/aiprovider.ts - Added getCurrentDateTimeString utility and modified getSystemPrompt with toggle logic; made getSystemPrompt public; added RecordingCallback type and upstream message capture
 - src/settings.ts - Added includeDatetime optional field to VaultBotPluginSettings
 - src/ui/model_settings_shared.ts - Added renderDateTimeToggle function and UI component
+- src/command_handler.ts - Completely refactored API call recording to use upstream message capture instead of downstream reconstruction
 - tests/aiprovider.test.ts - Added new datetime tests and toggle tests (22 total tests)
 
 ### Notes
 - Need to ensure consistent datetime formatting across all system messages
 - Consider caching behavior - should datetime be generated once per conversation or per message?
 - Initial decision: Generate datetime fresh for each system prompt call to ensure accuracy
+- **Critical Issue Discovered**: API call recording was reconstructing messages from settings instead of capturing actual sent messages
+- **Architectural Fix**: Recording must happen upstream where actual messages are constructed, not downstream after API calls
+- **Solution**: Use provider.getSystemPrompt() in recording logic to capture exact messages with datetime when enabled
 
 ## Result / Quality Gates
 - Build: PASS ✅
@@ -103,3 +127,55 @@ Successfully implemented automatic datetime prepending to all system messages in
 - **Disabled**: System messages contain only the user's system prompt (or no system message if empty)
 
 This gives users full control over whether AI responses include temporal context while maintaining the functionality for those who want it.
+
+## API Call Recording Architecture Issue & Solution
+
+### Problem Identified
+The original API call recording system had a critical flaw: it was reconstructing messages from raw settings **after** the AI call completed, rather than capturing the **actual messages sent** to the AI provider. This meant:
+
+- Recorded calls showed raw `system_prompt` from settings: `"You are a helpful assistant"`
+- But actual AI calls included processed system messages: `"Current date and time: 2025-09-02 10:45:30 (UTC offset -05:00)\n\nYou are a helpful assistant"`
+- The datetime toggle feature worked correctly, but archived calls didn't reflect what was actually sent
+
+### Root Cause
+Recording logic in `CommandHandler` was happening **downstream** after streaming completed:
+```typescript
+// WRONG: Reconstructing from settings
+const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
+```
+
+But actual message construction happened **upstream** in `AIProviderWrapper.getSystemPrompt()`:
+```typescript
+// CORRECT: What actually gets sent to AI
+public getSystemPrompt(): string | null {
+    const settings = this.getProviderSettings();
+    const basePrompt = settings?.system_prompt;
+    
+    if (settings?.includeDatetime !== false) {
+        const datetime = this.getCurrentDateTimeString();
+        return basePrompt ? `${datetime}\n\n${basePrompt}` : datetime;
+    }
+    
+    return basePrompt || null;
+}
+```
+
+### Solution Implemented
+1. **Made `getSystemPrompt()` public** in `AIProviderWrapper` for recording access
+2. **Updated all recording locations** in `CommandHandler` to use `provider.getSystemPrompt()` instead of raw settings
+3. **Modified `buildConversationMessages()`** to accept provider parameter for proper system prompt handling
+4. **Ensured recording captures exact messages** that were sent to AI providers
+
+### Architectural Principle
+**Recording should happen as close as possible to where actual messages are constructed**, not reconstructed downstream. This ensures recorded API calls match exactly what was sent to the AI provider, including all dynamic content like datetime prefixes.
+
+### Next Phase: Proper Upstream Recording
+~~The current fix resolves the immediate issue, but the ideal architecture would:~~
+✅ **COMPLETED**: Proper upstream recording implemented!
+
+1. ✅ **Capture messages at construction time** in `AIProviderWrapper.getStreamingResponseWithConversation()`
+2. ✅ **Pass recording callback** to the provider methods via optional RecordingCallback parameter
+3. ✅ **Eliminate reconstruction logic** entirely from `CommandHandler` - now uses captured messages
+4. ✅ **Ensure 100% accuracy** between recorded calls and actual API requests
+
+The new architecture captures the exact messages (including datetime when enabled) at the moment they are constructed and sent to the AI provider, ensuring perfect fidelity between what gets recorded and what actually gets sent to the API.

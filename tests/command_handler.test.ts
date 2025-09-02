@@ -42,6 +42,7 @@ vi.mock('../src/aiprovider', () => ({
     AIProviderWrapper: vi.fn().mockImplementation(() => ({
         getStreamingResponse: mockGetStreamingResponse,
         getStreamingResponseWithConversation: mockGetStreamingResponseWithConversation,
+        getSystemPrompt: vi.fn().mockReturnValue('System prompt (test)'),
     })),
 }));
 
@@ -114,7 +115,13 @@ describe('CommandHandler', () => {
         await commandHandler.handleGetResponseBelow(mockEditor as any, mockMarkdownView);
 
         expect(mockEditor.replaceSelection).toHaveBeenCalledWith(selection + plugin.settings.chatSeparator);
-        expect(mockGetStreamingResponse).toHaveBeenCalledWith(selection, expect.any(Function), expect.any(AbortSignal));
+        // Now expects optional 4th arg: recording callback
+        expect(mockGetStreamingResponse).toHaveBeenCalledWith(
+            selection,
+            expect.any(Function),
+            expect.any(AbortSignal),
+            expect.any(Function)
+        );
         expect(mockEditor.replaceRange).toHaveBeenCalledTimes(2);
         expect(mockEditor.setCursor).toHaveBeenCalledTimes(2);
     });
@@ -210,7 +217,7 @@ describe('CommandHandler', () => {
             onUpdate('answer part');
         });
 
-        await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
+    await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
 
         // Expect that replaceRange was called to insert the response above the separator block
         expect(mockEditor.replaceRange).toHaveBeenCalled();
@@ -426,7 +433,7 @@ describe('CommandHandler', () => {
                 onUpdate('New AI response');
             });
 
-            await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
+        await commandHandler.handleGetResponseAbove(mockEditor as any, mockMarkdownView);
 
             // Should call with conversation in correct chronological order for AI processing
             expect(mockGetStreamingResponseWithConversation).toHaveBeenCalledWith(
@@ -437,7 +444,8 @@ describe('CommandHandler', () => {
                     expect.objectContaining({ role: 'assistant', content: 'Latest assistant response' })
                 ]), 
                 expect.any(Function), 
-                expect.any(AbortSignal)
+                expect.any(AbortSignal),
+                expect.any(Function)
             );
         });
 
@@ -459,7 +467,8 @@ describe('CommandHandler', () => {
             expect(mockGetStreamingResponse).toHaveBeenCalledWith(
                 plainText.trim(),
                 expect.any(Function), 
-                expect.any(AbortSignal)
+                expect.any(AbortSignal),
+                expect.any(Function)
             );
         });
 

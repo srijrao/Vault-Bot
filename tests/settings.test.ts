@@ -128,12 +128,17 @@ vi.mock('../src/prompt_modal', () => ({
 
 // Mock AIProviderWrapper used by settings.ts testApiKey path
 const mockValidateApiKey = vi.fn().mockResolvedValue({ valid: true });
+const mockListModels = vi.fn().mockResolvedValue([
+    { id: 'gpt-4o', name: 'GPT-4o' },
+    { id: 'openai:gpt-4.1', name: 'GPT-4.1' },
+]);
 vi.mock('../src/aiprovider', async (importOriginal) => {
     const actual = await importOriginal() as any;
     class MockAIProviderWrapper {
         settings: any;
         constructor(settings: any) { this.settings = settings; }
         validateApiKey = mockValidateApiKey;
+        listModels = mockListModels;
     }
     return {
         ...actual,

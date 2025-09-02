@@ -1,4 +1,9 @@
-import { VaultBotPluginSettings } from "./settings";
+import { VaultBotPluginSettings } from './settings';
+import { type ChatMessage } from './recorder';
+
+// Type for recording callback
+export type RecordingCallback = (messages: ChatMessage[], model: string, options: Record<string, any>) => void;
+
 import { 
     AIProvider, 
     OpenAIProvider, 
@@ -38,15 +43,43 @@ export class AIProviderWrapper {
         }
     }
 
-    async getStreamingResponse(prompt: string, onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
+    async getStreamingResponse(
+        prompt: string, 
+        onUpdate: (text: string) => void, 
+        signal: AbortSignal,
+        recordingCallback?: RecordingCallback
+    ): Promise<void> {
         // Normalize single prompt to message array and use wrapper's conversation method
         const messages = this.normalizeToMessages(prompt);
-        return this.getStreamingResponseWithConversation(messages, onUpdate, signal);
+        return this.getStreamingResponseWithConversation(messages, onUpdate, signal, recordingCallback);
     }
 
-    async getStreamingResponseWithConversation(messages: AIMessage[], onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
+    async getStreamingResponseWithConversation(
+        messages: AIMessage[], 
+        onUpdate: (text: string) => void, 
+        signal: AbortSignal,
+        recordingCallback?: RecordingCallback
+    ): Promise<void> {
         // Prepend system prompt if it doesn't already exist and system prompt is configured
         const messagesWithSystemPrompt = this.prependSystemPrompt(messages);
+        
+        // Record the exact messages being sent if callback provided
+        if (recordingCallback && this.settings.recordApiCalls) {
+            const providerType = this.settings.apiProvider as ProviderType;
+            const providerSettings = this.settings.aiProviderSettings[providerType];
+            const model = providerSettings && 'model' in providerSettings ? (providerSettings as any).model || '' : '';
+            const temperature = providerSettings && 'temperature' in providerSettings ? (providerSettings as any).temperature || null : null;
+            const options = { temperature };
+            
+            // Convert AIMessage[] to ChatMessage[] for recording
+            const chatMessages: ChatMessage[] = messagesWithSystemPrompt.map(msg => ({
+                role: msg.role,
+                content: msg.content
+            }));
+            
+            recordingCallback(chatMessages, model, options);
+        }
+        
         return this.provider.getStreamingResponseWithConversation(messagesWithSystemPrompt, onUpdate, signal);
     }
 
@@ -86,7 +119,7 @@ export class AIProviderWrapper {
         ];
     }
 
-    private getSystemPrompt(): string | null {
+    public getSystemPrompt(): string | null {
         const providerType = this.settings.apiProvider as ProviderType;
         const providerSettings = this.settings.aiProviderSettings[providerType];
         

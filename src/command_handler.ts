@@ -1,7 +1,7 @@
 import { Editor, MarkdownView, Notice } from 'obsidian';
 import { AIProviderWrapper, AIMessage } from './aiprovider';
 import VaultBotPlugin from '../main';
-import { recordChatCall, resolveAiCallsDir, type ChatRequestRecord, type ChatResponseRecord } from './recorder';
+import { recordChatCall, resolveAiCallsDir, type ChatRequestRecord, type ChatResponseRecord, type ChatMessage } from './recorder';
 import { redactMessages } from './redaction';
 
 type Direction = 'above' | 'below';
@@ -74,13 +74,11 @@ export class CommandHandler {
         return { conversation, lastUserMessage };
     }
 
-    private buildConversationMessages(conversationParts: AIMessage[]): AIMessage[] {
+    private buildConversationMessages(conversationParts: AIMessage[], provider?: AIProviderWrapper): AIMessage[] {
         const messages: AIMessage[] = [];
         
         // Add system prompt if available
-        const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
-        const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
-        const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
+        const systemPrompt = provider ? provider.getSystemPrompt() || '' : '';
         
         if (systemPrompt) {
             messages.push({ role: 'system', content: systemPrompt });
@@ -200,40 +198,41 @@ export class CommandHandler {
                 lastInsertedEnd = newCursor; // Advance the region end
             };
 
+            // Create recording callback for upstream message capture
+            let recordedMessages: ChatMessage[] = [];
+            let recordedModel = '';
+            let recordedOptions: Record<string, any> = {};
+            const recordingCallback = (messages: ChatMessage[], model: string, options: Record<string, any>) => {
+                recordedMessages = messages;
+                recordedModel = model;
+                recordedOptions = options;
+            };
+
             // Use conversation context if available, otherwise use simple prompt
             if (conversation.length > 0) {
-                const conversationMessages = this.buildConversationMessages(conversation);
-                await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal);
+                const conversationMessages = this.buildConversationMessages(conversation, provider);
+                await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback);
             } else {
-                await provider.getStreamingResponse(queryText, onUpdate, signal);
+                await provider.getStreamingResponse(queryText, onUpdate, signal, recordingCallback);
             }
 
-            // After streaming completes, optionally record the call
-            if (this.plugin.settings.recordApiCalls) {
+            // After streaming completes, optionally record the call using captured messages
+            if (this.plugin.settings.recordApiCalls && recordedMessages.length > 0) {
                 try {
-                    const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
-                    const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
-                    const model = typeof cfgAny?.model === 'string' ? cfgAny.model : '';
-                    const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
-                    const temperature = typeof cfgAny?.temperature === 'number' ? cfgAny.temperature : null;
-
-                    const redaction = redactMessages([
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: queryText },
-                    ]);
+                    const redaction = redactMessages(recordedMessages);
 
                     const requestRecord: ChatRequestRecord = {
                         provider: this.plugin.settings.apiProvider,
-                        model,
+                        model: recordedModel,
                         messages: redaction.messages,
-                        options: { temperature },
+                        options: recordedOptions,
                         timestamp: requestStart.toISOString(),
                     };
 
                     const responseRecord: ChatResponseRecord = {
                         content: responseBuffer || null,
                         provider: this.plugin.settings.apiProvider,
-                        model,
+                        model: recordedModel,
                         timestamp: new Date().toISOString(),
                         duration_ms: Date.now() - requestStart.getTime(),
                     };
@@ -313,35 +312,35 @@ export class CommandHandler {
                 lastUpdatePos = responseStartPos; // Reset for next update
             };
 
-            await provider.getStreamingResponse(selection, onUpdate, signal);
+            // Create recording callback for upstream message capture
+            let recordedMessages: ChatMessage[] = [];
+            let recordedModel = '';
+            let recordedOptions: Record<string, any> = {};
+            const recordingCallback = (messages: ChatMessage[], model: string, options: Record<string, any>) => {
+                recordedMessages = messages;
+                recordedModel = model;
+                recordedOptions = options;
+            };
 
-            // After streaming completes, optionally record the call
-            if (this.plugin.settings.recordApiCalls) {
+            await provider.getStreamingResponse(selection, onUpdate, signal, recordingCallback);
+
+            // After streaming completes, optionally record the call using captured messages
+            if (this.plugin.settings.recordApiCalls && recordedMessages.length > 0) {
                 try {
-                    // Narrow provider-specific fields safely
-                    const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
-                    const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
-                    const model = typeof cfgAny?.model === 'string' ? cfgAny.model : '';
-                    const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
-                    const temperature = typeof cfgAny?.temperature === 'number' ? cfgAny.temperature : null;
-
-                    const redaction = redactMessages([
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: selection },
-                    ]);
+                    const redaction = redactMessages(recordedMessages);
 
                     const requestRecord: ChatRequestRecord = {
                         provider: this.plugin.settings.apiProvider,
-                        model,
+                        model: recordedModel,
                         messages: redaction.messages,
-                        options: { temperature },
+                        options: recordedOptions,
                         timestamp: requestStart.toISOString(),
                     };
 
                     const responseRecord: ChatResponseRecord = {
                         content: responseBuffer || null,
                         provider: this.plugin.settings.apiProvider,
-                        model,
+                        model: recordedModel,
                         timestamp: new Date().toISOString(),
                         duration_ms: Date.now() - requestStart.getTime(),
                     };
@@ -541,42 +540,42 @@ export class CommandHandler {
                     }
                 };
 
+                // Create recording callback for upstream message capture
+                let recordedMessages: ChatMessage[] = [];
+                let recordedModel = '';
+                let recordedOptions: Record<string, any> = {};
+                const recordingCallback = (messages: ChatMessage[], model: string, options: Record<string, any>) => {
+                    recordedMessages = messages;
+                    recordedModel = model;
+                    recordedOptions = options;
+                };
+
                 // Make API call based on mode
                 if (conversationMode && conversation.length > 0) {
-                    const conversationMessages = this.buildConversationMessages(conversation);
-                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal);
+                    const conversationMessages = this.buildConversationMessages(conversation, provider);
+                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback);
                 } else {
                     const promptText = selection || queryText;
-                    await provider.getStreamingResponse(promptText, onUpdate, signal);
+                    await provider.getStreamingResponse(promptText, onUpdate, signal, recordingCallback);
                 }
 
-                // After streaming completes, optionally record the call
-                if (this.plugin.settings.recordApiCalls) {
+                // After streaming completes, optionally record the call using captured messages
+                if (this.plugin.settings.recordApiCalls && recordedMessages.length > 0) {
                     try {
-                        const providerKey = this.plugin.settings.apiProvider as keyof typeof this.plugin.settings.aiProviderSettings;
-                        const cfgAny = this.plugin.settings.aiProviderSettings[providerKey] as any;
-                        const model = typeof cfgAny?.model === 'string' ? cfgAny.model : '';
-                        const systemPrompt = typeof cfgAny?.system_prompt === 'string' ? cfgAny.system_prompt : '';
-                        const temperature = typeof cfgAny?.temperature === 'number' ? cfgAny.temperature : null;
-
-                        const recordedPrompt = selection || queryText;
-                        const redaction = redactMessages([
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: recordedPrompt },
-                        ]);
+                        const redaction = redactMessages(recordedMessages);
 
                         const requestRecord: ChatRequestRecord = {
                             provider: this.plugin.settings.apiProvider,
-                            model,
+                            model: recordedModel,
                             messages: redaction.messages,
-                            options: { temperature },
+                            options: recordedOptions,
                             timestamp: requestStart.toISOString(),
                         };
 
                         const responseRecord: ChatResponseRecord = {
                             content: responseBuffer || null,
                             provider: this.plugin.settings.apiProvider,
-                            model,
+                            model: recordedModel,
                             timestamp: new Date().toISOString(),
                             duration_ms: Date.now() - requestStart.getTime(),
                         };

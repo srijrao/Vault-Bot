@@ -159,6 +159,10 @@ vi.mock('../src/aiprovider', async (importOriginal) => {
     settings: any;
     constructor(settings: any) { this.settings = settings; }
     validateApiKey = vi.fn().mockResolvedValue({ valid: true });
+    listModels = vi.fn().mockResolvedValue([
+      { id: 'gpt-4o', name: 'GPT-4o' },
+      { id: 'openai:gpt-4.1', name: 'GPT-4.1' },
+    ]);
   }
   return { ...actual, AIProviderWrapper: MockAIProviderWrapper };
 });
