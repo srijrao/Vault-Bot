@@ -16,12 +16,14 @@ export interface VaultBotPluginSettings {
 	chatSeparator: string;
 	aiProviderSettings: Record<string, AIProviderSettings>;
 	recordApiCalls: boolean;
+	includeDatetime?: boolean;
 }
 
 export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
 	apiProvider: 'openai',
 	chatSeparator: '\n\n----\n\n',
 	recordApiCalls: true,
+	includeDatetime: true,
 	aiProviderSettings: {
 		openai: {
 			api_key: '',

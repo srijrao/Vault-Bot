@@ -56,6 +56,10 @@ function ensureProviderDefaults(settings: VaultBotPluginSettings) {
       site_name: 'Obsidian Vault-Bot',
     } as OpenRouterProviderSettings;
   }
+  // Ensure includeDatetime has a default value
+  if (settings.includeDatetime === undefined) {
+    settings.includeDatetime = true;
+  }
 }
 
 // Render provider-specific model settings (model, system prompt, temperature, etc.).
@@ -70,12 +74,14 @@ export function renderProviderSpecificSettings(
     const openai = plugin.settings.aiProviderSettings.openai as OpenAIProviderSettings;
 
     renderModelSelector(container, plugin, openai, save, 'OpenAI');
+    renderDateTimeToggle(container, plugin, save);
     renderSystemPromptAndTemperature(container, openai, save);
 
   } else if (plugin.settings.apiProvider === 'openrouter') {
     const or = plugin.settings.aiProviderSettings.openrouter as OpenRouterProviderSettings;
 
     renderModelSelector(container, plugin, or, save, 'OpenRouter');
+    renderDateTimeToggle(container, plugin, save);
     renderSystemPromptAndTemperature(container, or, save);
     renderOpenRouterSpecificSettings(container, or, save);
   }
@@ -250,6 +256,25 @@ function renderModelSelector(
     loadingModels = false;
     populateDropdown([], providerSettings.model);
   });
+}
+
+function renderDateTimeToggle(
+  container: HTMLElement,
+  plugin: PluginLike,
+  save: (immediate?: boolean) => Promise<void> | void
+) {
+  new Setting(container)
+    .setName('Include Date/Time in System Messages')
+    .setDesc('Automatically prepend current date and time to system messages for temporal context')
+    .addToggle((toggle) => {
+      toggle
+        .setValue(plugin.settings.includeDatetime !== false) // Default to true if not specified
+        .onChange(async (value) => {
+          plugin.settings.includeDatetime = value;
+          await save();
+        });
+      return toggle;
+    });
 }
 
 function renderSystemPromptAndTemperature(

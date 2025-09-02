@@ -143,7 +143,7 @@ describe("AIProviderWrapper", () => {
             [
                 {
                     role: "system",
-                    content: "Test system prompt"
+                    content: expect.stringMatching(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)\n\nTest system prompt$/)
                 },
                 {
                     role: "user",
@@ -229,7 +229,7 @@ describe("AIProviderWrapper", () => {
             [
                 {
                     role: "system",
-                    content: "Test prompt"
+                    content: expect.stringMatching(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)\n\nTest prompt$/)
                 },
                 {
                     role: "user",
@@ -265,7 +265,7 @@ describe("AIProviderWrapper", () => {
             [
                 {
                     role: "system",
-                    content: "Test prompt"
+                    content: expect.stringMatching(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)\n\nTest prompt$/)
                 },
                 {
                     role: "user",
@@ -418,7 +418,7 @@ describe("AIProviderWrapper", () => {
 
             expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
                 [
-                    { role: "system", content: "You are a helpful assistant" },
+                    { role: "system", content: expect.stringMatching(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)\n\nYou are a helpful assistant$/) },
                     { role: "user", content: "Hello" }
                 ],
                 onUpdate,
@@ -490,7 +490,10 @@ describe("AIProviderWrapper", () => {
             );
 
             expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
-                [{ role: "user", content: "Hello" }],
+                [
+                    { role: "system", content: expect.stringMatching(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)$/) },
+                    { role: "user", content: "Hello" }
+                ],
                 onUpdate,
                 abortController.signal
             );
@@ -522,7 +525,10 @@ describe("AIProviderWrapper", () => {
             );
 
             expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
-                [{ role: "user", content: "Hello" }],
+                [
+                    { role: "system", content: expect.stringMatching(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)$/) },
+                    { role: "user", content: "Hello" }
+                ],
                 onUpdate,
                 abortController.signal
             );
@@ -555,12 +561,301 @@ describe("AIProviderWrapper", () => {
 
             expect(mockOpenRouterProvider.getStreamingResponseWithConversation).toHaveBeenCalledWith(
                 [
-                    { role: "system", content: "OpenRouter system prompt" },
+                    { role: "system", content: expect.stringMatching(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)\n\nOpenRouter system prompt$/) },
                     { role: "user", content: "Test prompt" }
                 ],
                 onUpdate,
                 abortController.signal
             );
+        });
+    });
+
+    describe("DateTime in System Prompts", () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it("should include current datetime in system prompt when system_prompt is configured", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "You are a helpful assistant",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledTimes(1);
+            const calledArgs = mockOpenAIProvider.getStreamingResponseWithConversation.mock.calls[0][0];
+            
+            // Should have system message with datetime
+            expect(calledArgs).toHaveLength(2);
+            expect(calledArgs[0].role).toBe("system");
+            expect(calledArgs[0].content).toMatch(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)\n\nYou are a helpful assistant$/);
+            expect(calledArgs[1]).toEqual({ role: "user", content: "Hello" });
+        });
+
+        it("should include only datetime when no system_prompt is configured", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledTimes(1);
+            const calledArgs = mockOpenAIProvider.getStreamingResponseWithConversation.mock.calls[0][0];
+            
+            // Should have system message with only datetime
+            expect(calledArgs).toHaveLength(2);
+            expect(calledArgs[0].role).toBe("system");
+            expect(calledArgs[0].content).toMatch(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)$/);
+            expect(calledArgs[1]).toEqual({ role: "user", content: "Hello" });
+        });
+
+        it("should include datetime even with empty system_prompt", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledTimes(1);
+            const calledArgs = mockOpenAIProvider.getStreamingResponseWithConversation.mock.calls[0][0];
+            
+            // Should have system message with only datetime (empty system_prompt treated as null)
+            expect(calledArgs).toHaveLength(2);
+            expect(calledArgs[0].role).toBe("system");
+            expect(calledArgs[0].content).toMatch(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)$/);
+            expect(calledArgs[1]).toEqual({ role: "user", content: "Hello" });
+        });
+
+        it("should not override existing system message in conversation", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "You are a helpful assistant",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [
+                    { role: "system", content: "Custom system prompt" },
+                    { role: "user", content: "Hello" }
+                ],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledTimes(1);
+            const calledArgs = mockOpenAIProvider.getStreamingResponseWithConversation.mock.calls[0][0];
+            
+            // Should preserve the existing system message
+            expect(calledArgs).toHaveLength(2);
+            expect(calledArgs[0]).toEqual({ role: "system", content: "Custom system prompt" });
+            expect(calledArgs[1]).toEqual({ role: "user", content: "Hello" });
+        });
+
+        it("should work with OpenRouter provider as well", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openrouter",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                aiProviderSettings: {
+                    openrouter: {
+                        api_key: "test-key",
+                        model: "openai/gpt-4o",
+                        system_prompt: "You are a helpful assistant",
+                        temperature: 0.7,
+                    } as OpenRouterProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenRouterProvider.getStreamingResponseWithConversation).toHaveBeenCalledTimes(1);
+            const calledArgs = mockOpenRouterProvider.getStreamingResponseWithConversation.mock.calls[0][0];
+            
+            // Should have system message with datetime
+            expect(calledArgs).toHaveLength(2);
+            expect(calledArgs[0].role).toBe("system");
+            expect(calledArgs[0].content).toMatch(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)\n\nYou are a helpful assistant$/);
+            expect(calledArgs[1]).toEqual({ role: "user", content: "Hello" });
+        });
+
+        it("should not include datetime when toggle is disabled", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                includeDatetime: false,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "You are a helpful assistant",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledTimes(1);
+            const calledArgs = mockOpenAIProvider.getStreamingResponseWithConversation.mock.calls[0][0];
+            
+            // Should have system message without datetime
+            expect(calledArgs).toHaveLength(2);
+            expect(calledArgs[0].role).toBe("system");
+            expect(calledArgs[0].content).toBe("You are a helpful assistant");
+            expect(calledArgs[1]).toEqual({ role: "user", content: "Hello" });
+        });
+
+        it("should return no system message when datetime is disabled and no system prompt", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                includeDatetime: false,
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledTimes(1);
+            const calledArgs = mockOpenAIProvider.getStreamingResponseWithConversation.mock.calls[0][0];
+            
+            // Should have no system message
+            expect(calledArgs).toHaveLength(1);
+            expect(calledArgs[0]).toEqual({ role: "user", content: "Hello" });
+        });
+
+        it("should default to including datetime when setting is undefined", async () => {
+            const settings: VaultBotPluginSettings = {
+                apiProvider: "openai",
+                chatSeparator: "---",
+                recordApiCalls: true,
+                includeDatetime: true, // Explicitly set to true for this test
+                // includeDatetime is undefined, should default to true
+                aiProviderSettings: {
+                    openai: {
+                        api_key: "test-key",
+                        model: "gpt-4o",
+                        system_prompt: "You are a helpful assistant",
+                        temperature: 0.7,
+                    } as OpenAIProviderSettings,
+                },
+            };
+
+            const wrapper = new AIProviderWrapper(settings);
+            const onUpdate = vi.fn();
+            const abortController = new AbortController();
+
+            await wrapper.getStreamingResponseWithConversation(
+                [{ role: "user", content: "Hello" }],
+                onUpdate,
+                abortController.signal
+            );
+
+            expect(mockOpenAIProvider.getStreamingResponseWithConversation).toHaveBeenCalledTimes(1);
+            const calledArgs = mockOpenAIProvider.getStreamingResponseWithConversation.mock.calls[0][0];
+            
+            // Should have system message with datetime
+            expect(calledArgs).toHaveLength(2);
+            expect(calledArgs[0].role).toBe("system");
+            expect(calledArgs[0].content).toMatch(/^Current date and time: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC offset [+-]\d{2}:\d{2}\)\n\nYou are a helpful assistant$/);
+            expect(calledArgs[1]).toEqual({ role: "user", content: "Hello" });
         });
     });
 });
