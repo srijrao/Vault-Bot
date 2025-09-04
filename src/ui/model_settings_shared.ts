@@ -11,6 +11,61 @@ export type PluginLike = {
   saveSettings: () => Promise<void> | void;
 };
 
+// Utility function to create collapsible sections
+function createCollapsibleSection(
+  parent: HTMLElement,
+  title: string,
+  renderContent: (contentContainer: HTMLElement) => void,
+  plugin: PluginLike,
+  save: (immediate?: boolean) => Promise<void> | void,
+  initiallyExpanded: boolean = true
+) {
+  // Ensure UI state exists
+  if (!plugin.settings.uiState) {
+    plugin.settings.uiState = { collapsedSections: {} };
+  }
+  if (!plugin.settings.uiState.collapsedSections) {
+    plugin.settings.uiState.collapsedSections = {};
+  }
+
+  // Check saved state, fall back to initiallyExpanded if not saved
+  const sectionKey = title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const isExpanded = plugin.settings.uiState.collapsedSections[sectionKey] !== undefined 
+    ? !plugin.settings.uiState.collapsedSections[sectionKey]
+    : initiallyExpanded;
+
+  const section = parent.createDiv({ cls: 'vault-bot-collapsible-section' });
+  const header = section.createDiv({ 
+    cls: isExpanded ? 'vault-bot-collapsible-header' : 'vault-bot-collapsible-header collapsed',
+    text: title 
+  });
+  const content = section.createDiv({ 
+    cls: isExpanded ? 'vault-bot-collapsible-content' : 'vault-bot-collapsible-content hidden' 
+  });
+
+  header.addEventListener('click', async () => {
+    const isCurrentlyExpanded = !content.classList.contains('hidden');
+    if (isCurrentlyExpanded) {
+      content.classList.add('hidden');
+      header.classList.add('collapsed');
+      if (plugin.settings.uiState?.collapsedSections) {
+        plugin.settings.uiState.collapsedSections[sectionKey] = true;
+      }
+    } else {
+      content.classList.remove('hidden');
+      header.classList.remove('collapsed');
+      if (plugin.settings.uiState?.collapsedSections) {
+        plugin.settings.uiState.collapsedSections[sectionKey] = false;
+      }
+    }
+    // Save the UI state
+    await save();
+  });
+
+  renderContent(content);
+  return section;
+}
+
 // Renders the shared Provider selector. Caller should pass a reRender function
 // that clears and rebuilds the section so provider-specific controls refresh.
 export function renderProviderSelector(
@@ -73,23 +128,44 @@ export function renderProviderSpecificSettings(
   if (plugin.settings.apiProvider === 'openai') {
     const openai = plugin.settings.aiProviderSettings.openai as OpenAIProviderSettings;
 
-    renderModelSelector(container, plugin, openai, save, 'OpenAI');
-    renderDateTimeToggle(container, plugin, save);
-    renderSystemPromptAndTemperature(container, openai, save);
-    container.createEl('h3', { text: 'Linked Notes Settings' });
-    renderLinkedNotesSettings(container, plugin, save);
+    createCollapsibleSection(container, 'Model', (content) => {
+      renderModelSelector(content, plugin, openai, save, 'OpenAI');
+    }, plugin, save);
+    
+    createCollapsibleSection(container, 'Date/Time', (content) => {
+      renderDateTimeToggle(content, plugin, save);
+    }, plugin, save);
+    
+    createCollapsibleSection(container, 'System Prompt & Temperature', (content) => {
+      renderSystemPromptAndTemperature(content, openai, save);
+    }, plugin, save);
+    
+    createCollapsibleSection(container, 'Linked Notes Settings', (content) => {
+      renderLinkedNotesSettings(content, plugin, save);
+    }, plugin, save);
 
   } else if (plugin.settings.apiProvider === 'openrouter') {
     const or = plugin.settings.aiProviderSettings.openrouter as OpenRouterProviderSettings;
 
-    renderModelSelector(container, plugin, or, save, 'OpenRouter');
-    renderDateTimeToggle(container, plugin, save);
-    renderSystemPromptAndTemperature(container, or, save);
-    container.createEl('h3', { text: 'Linked Notes Settings' });
-    renderLinkedNotesSettings(container, plugin, save);
-    container.createEl('h3', { text: 'OpenRouter Analytics Settings' });
-    renderOpenRouterSpecificSettings(container, or, save);
-
+    createCollapsibleSection(container, 'Model', (content) => {
+      renderModelSelector(content, plugin, or, save, 'OpenRouter');
+    }, plugin, save);
+    
+    createCollapsibleSection(container, 'Date/Time', (content) => {
+      renderDateTimeToggle(content, plugin, save);
+    }, plugin, save);
+    
+    createCollapsibleSection(container, 'System Prompt & Temperature', (content) => {
+      renderSystemPromptAndTemperature(content, or, save);
+    }, plugin, save);
+    
+    createCollapsibleSection(container, 'Linked Notes Settings', (content) => {
+      renderLinkedNotesSettings(content, plugin, save);
+    }, plugin, save);
+    
+    createCollapsibleSection(container, 'OpenRouter Analytics Settings', (content) => {
+      renderOpenRouterSpecificSettings(content, or, save);
+    }, plugin, save, false); // Default to collapsed
   }
 }
 
@@ -514,6 +590,7 @@ export function renderModelSettingsSection(
 ) {
   const reRender = () => {
     container.empty();
+    container.classList.add('vault-bot-ui'); // Add global UI class for font sizing
     container.createEl('h2', { text: 'AI Bot Model Settings' });
     renderProviderSelector(container, plugin, reRender, save);
     renderProviderSpecificSettings(container, plugin, save);

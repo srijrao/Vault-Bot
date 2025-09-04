@@ -25,6 +25,9 @@ export interface VaultBotPluginSettings {
 	linkRecursionDepth?: number;
 	noteExclusionsLevel1?: string[];
 	noteExclusionsDeepLink?: string[];
+	uiState?: {
+		collapsedSections?: Record<string, boolean>;
+	};
 }
 
 export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
@@ -56,6 +59,9 @@ export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
 			site_name: "Obsidian Vault-Bot",
 		} as OpenRouterProviderSettings
 	},
+	uiState: {
+		collapsedSections: {}
+	}
 }
 
 export class VaultBotSettingTab extends PluginSettingTab {

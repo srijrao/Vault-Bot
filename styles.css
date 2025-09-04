@@ -8,6 +8,58 @@ If your plugin does not need CSS, delete this file.
 */
 
 /* Vault-Bot Plugin Specific Styles - Scoped to avoid conflicts */
+
+/* Global font size for the entire plugin UI */
+.vault-bot-ui {
+  font-size: 0.95em;
+}
+
+/* Collapsible section styles */
+.vault-bot-collapsible-section {
+  margin-bottom: 1em;
+}
+
+.vault-bot-collapsible-header {
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0.4em 0.6em;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+.vault-bot-collapsible-header:hover {
+  background: var(--background-secondary-alt);
+}
+
+.vault-bot-collapsible-header::before {
+  content: "▼";
+  font-size: 0.8em;
+  margin-right: 0.5em;
+  transition: transform 0.2s ease;
+}
+
+.vault-bot-collapsible-header.collapsed::before {
+  transform: rotate(-90deg);
+}
+
+.vault-bot-collapsible-header.collapsed {
+  font-size: 0.9em;
+  opacity: 0.8;
+}
+
+.vault-bot-collapsible-content {
+  margin-left: 1em;
+  margin-top: 0.5em;
+  transition: opacity 0.2s ease;
+}
+
+.vault-bot-collapsible-content.hidden {
+  display: none;
+}
 .vault-bot-model-control-container {
   display: flex;
   flex-direction: column;
