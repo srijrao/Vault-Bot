@@ -75,17 +75,21 @@ export function renderProviderSpecificSettings(
 
     renderModelSelector(container, plugin, openai, save, 'OpenAI');
     renderDateTimeToggle(container, plugin, save);
-    renderLinkedNotesSettings(container, plugin, save);
     renderSystemPromptAndTemperature(container, openai, save);
+    container.createEl('h3', { text: 'Linked Notes Settings' });
+    renderLinkedNotesSettings(container, plugin, save);
 
   } else if (plugin.settings.apiProvider === 'openrouter') {
     const or = plugin.settings.aiProviderSettings.openrouter as OpenRouterProviderSettings;
 
     renderModelSelector(container, plugin, or, save, 'OpenRouter');
     renderDateTimeToggle(container, plugin, save);
-    renderLinkedNotesSettings(container, plugin, save);
     renderSystemPromptAndTemperature(container, or, save);
+    container.createEl('h3', { text: 'Linked Notes Settings' });
+    renderLinkedNotesSettings(container, plugin, save);
+    container.createEl('h3', { text: 'OpenRouter Analytics Settings' });
     renderOpenRouterSpecificSettings(container, or, save);
+
   }
 }
 
