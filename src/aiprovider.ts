@@ -67,10 +67,11 @@ export class AIProviderWrapper {
         onUpdate: (text: string) => void, 
         signal: AbortSignal,
         recordingCallback?: RecordingCallback,
-        currentFile?: TFile
+        currentFile?: TFile,
+        isConversationMode?: boolean
     ): Promise<void> {
         // Enhance messages with linked content if content retrieval service is available
-        const enhancedMessages = await this.enhanceMessagesWithContent(messages, currentFile);
+        const enhancedMessages = await this.enhanceMessagesWithContent(messages, currentFile, isConversationMode);
         
         // Prepend system prompt if it doesn't already exist and system prompt is configured
         const messagesWithSystemPrompt = this.prependSystemPrompt(enhancedMessages);
@@ -131,7 +132,7 @@ export class AIProviderWrapper {
         ];
     }
 
-    private async enhanceMessagesWithContent(messages: AIMessage[], currentFile?: TFile): Promise<AIMessage[]> {
+    private async enhanceMessagesWithContent(messages: AIMessage[], currentFile?: TFile, isConversationMode?: boolean): Promise<AIMessage[]> {
         if (!this.contentRetrievalService) {
             return messages; // No content retrieval service available
         }
@@ -152,10 +153,14 @@ export class AIProviderWrapper {
                 return messages; // No user message to analyze
             }
 
+            // In conversation mode, exclude current file content to avoid duplication of conversation history
+            const excludeCurrentFileContent = isConversationMode && messages.length > 1;
+
             // Retrieve content based on settings
             const retrievedNotes = await this.contentRetrievalService.retrieveContent(
                 lastUserMessage.content, 
-                currentFile
+                currentFile,
+                excludeCurrentFileContent
             );
 
             if (retrievedNotes.length === 0) {

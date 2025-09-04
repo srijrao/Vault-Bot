@@ -123,8 +123,8 @@ describe('CommandHandler', () => {
             expect.any(Function),
             undefined // currentFile parameter (view.file is null in test)
         );
-        expect(mockEditor.replaceRange).toHaveBeenCalledTimes(2);
-        expect(mockEditor.setCursor).toHaveBeenCalledTimes(2);
+        expect(mockEditor.replaceRange).toHaveBeenCalledTimes(3); // 2 streaming updates + 1 separator
+        expect(mockEditor.setCursor).toHaveBeenCalledTimes(3); // 2 streaming updates + 1 separator
     });
 
     it('should correctly handle buffer-based streaming updates', async () => {
@@ -157,10 +157,11 @@ describe('CommandHandler', () => {
         expect(secondCall[1]).toEqual({ line: 6, ch: 0 }); // Same response start position
         expect(secondCall[2]).toEqual({ line: 2, ch: 10 }); // Current cursor (will be overwritten)
 
-        // Verify cursor was set to end of content after each update
-        expect(mockEditor.setCursor).toHaveBeenCalledTimes(2);
+        // Verify cursor was set to end of content after each update + separator
+        expect(mockEditor.setCursor).toHaveBeenCalledTimes(3); // 2 streaming updates + 1 separator
         expect(mockEditor.setCursor).toHaveBeenNthCalledWith(1, { line: 6, ch: 6 }); // End of 'chunk1'
         expect(mockEditor.setCursor).toHaveBeenNthCalledWith(2, { line: 6, ch: 12 }); // End of 'chunk1chunk2'
+        // Third call is for separator positioning - just verify it was called
     });
 
     it('should handle stopping a response', () => {
@@ -447,7 +448,8 @@ describe('CommandHandler', () => {
                 expect.any(Function), 
                 expect.any(AbortSignal),
                 expect.any(Function),
-                undefined // currentFile parameter (view.file is null in test)
+                undefined, // currentFile parameter (view.file is null in test)
+                true // isConversationMode parameter
             );
         });
 

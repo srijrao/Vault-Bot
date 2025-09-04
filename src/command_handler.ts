@@ -209,12 +209,30 @@ export class CommandHandler {
                 recordedOptions = options;
             };
 
+            // Buffer for tracking final response to add separator after completion
+            let finalResponseBuffer = '';
+            const originalOnUpdate = onUpdate;
+            const enhancedOnUpdate = (text: string) => {
+                finalResponseBuffer += text;
+                originalOnUpdate(text);
+            };
+
             // Use conversation context if available, otherwise use simple prompt
             if (conversation.length > 0) {
                 const conversationMessages = this.buildConversationMessages(conversation, provider);
-                await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback, currentFile || undefined);
+                await provider.getStreamingResponseWithConversation(conversationMessages, enhancedOnUpdate, signal, recordingCallback, currentFile || undefined, true);
             } else {
-                await provider.getStreamingResponse(queryText, onUpdate, signal, recordingCallback, currentFile || undefined);
+                await provider.getStreamingResponse(queryText, enhancedOnUpdate, signal, recordingCallback, currentFile || undefined);
+            }
+
+            // After response is complete, add separator for next interaction
+            if (finalResponseBuffer) {
+                const currentCursor = editor.getCursor();
+                const separatorToAdd = direction === 'below' ? '\n' + this.plugin.settings.chatSeparator : this.plugin.settings.chatSeparator + '\n';
+                editor.replaceRange(separatorToAdd, currentCursor, currentCursor);
+                // Position cursor after the separator for next input
+                const newCursorPos = this.calculateEndPosition(currentCursor, separatorToAdd);
+                editor.setCursor(newCursorPos);
             }
 
             // After streaming completes, optionally record the call using captured messages
@@ -325,6 +343,16 @@ export class CommandHandler {
             };
 
             await provider.getStreamingResponse(selection, onUpdate, signal, recordingCallback, currentFile || undefined);
+
+            // After response is complete, add separator for next interaction
+            if (responseBuffer) {
+                const currentCursor = editor.getCursor();
+                const separatorToAdd = '\n' + this.plugin.settings.chatSeparator;
+                editor.replaceRange(separatorToAdd, currentCursor, currentCursor);
+                // Position cursor after the separator for next input
+                const newCursorPos = this.calculateEndPosition(currentCursor, separatorToAdd);
+                editor.setCursor(newCursorPos);
+            }
 
             // After streaming completes, optionally record the call using captured messages
             if (this.plugin.settings.recordApiCalls && recordedMessages.length > 0) {
@@ -556,10 +584,33 @@ export class CommandHandler {
                 // Make API call based on mode
                 if (conversationMode && conversation.length > 0) {
                     const conversationMessages = this.buildConversationMessages(conversation, provider);
-                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback, currentFile || undefined);
+                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback, currentFile || undefined, true);
                 } else {
                     const promptText = selection || queryText;
                     await provider.getStreamingResponse(promptText, onUpdate, signal, recordingCallback, currentFile || undefined);
+                }
+
+                // After response is complete, add separator for next interaction (only if we actually got a response)
+                if (responseBuffer) {
+                    const currentCursor = editor.getCursor();
+                    let separatorToAdd: string;
+                    
+                    if (conversationMode) {
+                        // For conversation mode, add separator below the response
+                        separatorToAdd = '\n' + this.plugin.settings.chatSeparator;
+                    } else {
+                        // For other modes (selection/separator), add separator above the response
+                        separatorToAdd = this.plugin.settings.chatSeparator + '\n';
+                        // Insert at the beginning of the response area
+                        const insertPos = responseStartPos;
+                        editor.replaceRange(separatorToAdd, insertPos, insertPos);
+                        return; // Early return to avoid duplicate separator insertion
+                    }
+                    
+                    editor.replaceRange(separatorToAdd, currentCursor, currentCursor);
+                    // Position cursor after the separator for next input
+                    const newCursorPos = this.calculateEndPosition(currentCursor, separatorToAdd);
+                    editor.setCursor(newCursorPos);
                 }
 
                 // After streaming completes, optionally record the call using captured messages

@@ -36,12 +36,12 @@ export class ContentRetrievalService {
   /**
    * Main entry point for retrieving content based on settings
    */
-  async retrieveContent(messageText: string, currentFile?: TFile): Promise<RetrievedNote[]> {
+  async retrieveContent(messageText: string, currentFile?: TFile, excludeCurrentFileContent?: boolean): Promise<RetrievedNote[]> {
     const retrievedNotes: Map<string, RetrievedNote> = new Map();
 
     try {
-      // Include current note if enabled
-      if (this.settings.includeCurrentNote && currentFile) {
+      // Include current note if enabled (but not if explicitly excluded to avoid conversation duplication)
+      if (this.settings.includeCurrentNote && currentFile && !excludeCurrentFileContent) {
         const currentNote = await this.retrieveNote(currentFile);
         if (currentNote) {
           retrievedNotes.set(currentFile.path, currentNote);
