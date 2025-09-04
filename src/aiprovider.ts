@@ -1,5 +1,7 @@
 import { VaultBotPluginSettings } from './settings';
 import { type ChatMessage } from './recorder';
+import { ContentRetrievalService } from './services/content_retrieval';
+import { App, TFile } from 'obsidian';
 
 // Type for recording callback
 export type RecordingCallback = (messages: ChatMessage[], model: string, options: Record<string, any>) => void;
@@ -20,10 +22,15 @@ export type { AIMessage, ModelInfo };
 export class AIProviderWrapper {
     private settings: VaultBotPluginSettings;
     private provider: AIProvider;
+    private contentRetrievalService?: ContentRetrievalService;
 
-    constructor(settings: VaultBotPluginSettings) {
+    constructor(settings: VaultBotPluginSettings, app?: App) {
         this.settings = settings;
         this.provider = this.createProvider();
+        
+        if (app) {
+            this.contentRetrievalService = new ContentRetrievalService(app, settings);
+        }
     }
 
     private createProvider(): AIProvider {
@@ -47,21 +54,26 @@ export class AIProviderWrapper {
         prompt: string, 
         onUpdate: (text: string) => void, 
         signal: AbortSignal,
-        recordingCallback?: RecordingCallback
+        recordingCallback?: RecordingCallback,
+        currentFile?: TFile
     ): Promise<void> {
         // Normalize single prompt to message array and use wrapper's conversation method
         const messages = this.normalizeToMessages(prompt);
-        return this.getStreamingResponseWithConversation(messages, onUpdate, signal, recordingCallback);
+        return this.getStreamingResponseWithConversation(messages, onUpdate, signal, recordingCallback, currentFile);
     }
 
     async getStreamingResponseWithConversation(
         messages: AIMessage[], 
         onUpdate: (text: string) => void, 
         signal: AbortSignal,
-        recordingCallback?: RecordingCallback
+        recordingCallback?: RecordingCallback,
+        currentFile?: TFile
     ): Promise<void> {
+        // Enhance messages with linked content if content retrieval service is available
+        const enhancedMessages = await this.enhanceMessagesWithContent(messages, currentFile);
+        
         // Prepend system prompt if it doesn't already exist and system prompt is configured
-        const messagesWithSystemPrompt = this.prependSystemPrompt(messages);
+        const messagesWithSystemPrompt = this.prependSystemPrompt(enhancedMessages);
         
         // Record the exact messages being sent if callback provided
         if (recordingCallback && this.settings.recordApiCalls) {
@@ -117,6 +129,62 @@ export class AIProviderWrapper {
             },
             ...messages
         ];
+    }
+
+    private async enhanceMessagesWithContent(messages: AIMessage[], currentFile?: TFile): Promise<AIMessage[]> {
+        if (!this.contentRetrievalService) {
+            return messages; // No content retrieval service available
+        }
+
+        // Check if any content retrieval features are enabled
+        const hasContentFeatures = this.settings.includeCurrentNote || 
+                                   this.settings.includeOpenNotes || 
+                                   this.settings.includeLinkedNotes;
+        
+        if (!hasContentFeatures) {
+            return messages; // No content features enabled
+        }
+
+        try {
+            // Get the last user message to analyze for links
+            const lastUserMessage = messages.filter(msg => msg.role === 'user').pop();
+            if (!lastUserMessage) {
+                return messages; // No user message to analyze
+            }
+
+            // Retrieve content based on settings
+            const retrievedNotes = await this.contentRetrievalService.retrieveContent(
+                lastUserMessage.content, 
+                currentFile
+            );
+
+            if (retrievedNotes.length === 0) {
+                return messages; // No content retrieved
+            }
+
+            // Format the retrieved content
+            const formattedContent = this.contentRetrievalService.formatNotesForAI(retrievedNotes);
+
+            // Create a new array of messages with the enhanced last user message
+            const enhancedMessages = [...messages];
+            
+            // Find the last user message index and enhance it
+            for (let i = enhancedMessages.length - 1; i >= 0; i--) {
+                if (enhancedMessages[i].role === 'user') {
+                    enhancedMessages[i] = {
+                        ...enhancedMessages[i],
+                        content: enhancedMessages[i].content + formattedContent
+                    };
+                    break;
+                }
+            }
+
+            return enhancedMessages;
+        } catch (error) {
+            console.error('Error enhancing messages with content:', error);
+            // Return original messages if enhancement fails
+            return messages;
+        }
     }
 
     public getSystemPrompt(): string | null {

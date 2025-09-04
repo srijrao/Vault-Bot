@@ -75,6 +75,7 @@ export function renderProviderSpecificSettings(
 
     renderModelSelector(container, plugin, openai, save, 'OpenAI');
     renderDateTimeToggle(container, plugin, save);
+    renderLinkedNotesSettings(container, plugin, save);
     renderSystemPromptAndTemperature(container, openai, save);
 
   } else if (plugin.settings.apiProvider === 'openrouter') {
@@ -82,6 +83,7 @@ export function renderProviderSpecificSettings(
 
     renderModelSelector(container, plugin, or, save, 'OpenRouter');
     renderDateTimeToggle(container, plugin, save);
+    renderLinkedNotesSettings(container, plugin, save);
     renderSystemPromptAndTemperature(container, or, save);
     renderOpenRouterSpecificSettings(container, or, save);
   }
@@ -274,6 +276,123 @@ function renderDateTimeToggle(
           await save();
         });
       return toggle;
+    });
+}
+
+function renderLinkedNotesSettings(
+  container: HTMLElement,
+  plugin: PluginLike,
+  save: (immediate?: boolean) => Promise<void> | void
+) {
+  // Ensure all linked notes settings have default values
+  if (plugin.settings.includeCurrentNote === undefined) {
+    plugin.settings.includeCurrentNote = true;
+  }
+  if (plugin.settings.includeOpenNotes === undefined) {
+    plugin.settings.includeOpenNotes = false;
+  }
+  if (plugin.settings.includeLinkedNotes === undefined) {
+    plugin.settings.includeLinkedNotes = true;
+  }
+  if (plugin.settings.extractNotesInReadingView === undefined) {
+    plugin.settings.extractNotesInReadingView = false;
+  }
+  if (plugin.settings.includeLinksInRenderedHTML === undefined) {
+    plugin.settings.includeLinksInRenderedHTML = false;
+  }
+  if (plugin.settings.linkRecursionDepth === undefined) {
+    plugin.settings.linkRecursionDepth = 1;
+  }
+  if (plugin.settings.noteExclusionsLevel1 === undefined) {
+    plugin.settings.noteExclusionsLevel1 = [];
+  }
+  if (plugin.settings.noteExclusionsDeepLink === undefined) {
+    plugin.settings.noteExclusionsDeepLink = [];
+  }
+
+  new Setting(container)
+    .setName('Include Current Note')
+    .setDesc('Automatically include the content of the current note in your message.')
+    .addToggle((toggle) => {
+      toggle
+        .setValue(plugin.settings.includeCurrentNote !== false)
+        .onChange(async (value) => {
+          plugin.settings.includeCurrentNote = value;
+          await save();
+        });
+      return toggle;
+    });
+
+  new Setting(container)
+    .setName('Include All Open Notes')
+    .setDesc('Automatically include the content of all open notes in the workspace in your message.')
+    .addToggle((toggle) => {
+      toggle
+        .setValue(plugin.settings.includeOpenNotes === true)
+        .onChange(async (value) => {
+          plugin.settings.includeOpenNotes = value;
+          await save();
+        });
+      return toggle;
+    });
+
+  new Setting(container)
+    .setName('Include Linked Notes')
+    .setDesc('Automatically include the content of notes referenced by [[wikilinks]] or markdown links in your message.')
+    .addToggle((toggle) => {
+      toggle
+        .setValue(plugin.settings.includeLinkedNotes !== false)
+        .onChange(async (value) => {
+          plugin.settings.includeLinkedNotes = value;
+          await save();
+        });
+      return toggle;
+    });
+
+  new Setting(container)
+    .setName('Extract in Reading View')
+    .setDesc('Render included notes to HTML and extract text content instead of using raw markdown.')
+    .addToggle((toggle) => {
+      toggle
+        .setValue(plugin.settings.extractNotesInReadingView === true)
+        .onChange(async (value) => {
+          plugin.settings.extractNotesInReadingView = value;
+          await save();
+          // Re-render to show/hide conditional settings
+          renderLinkedNotesSettings(container.parentElement!, plugin, save);
+        });
+      return toggle;
+    });
+
+  // Conditional setting - only show if extractNotesInReadingView is enabled
+  if (plugin.settings.extractNotesInReadingView) {
+    new Setting(container)
+      .setName('Include Links Found in Rendered HTML')
+      .setDesc('When extracting notes in reading view, also scan the rendered HTML for additional links to include.')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(plugin.settings.includeLinksInRenderedHTML === true)
+          .onChange(async (value) => {
+            plugin.settings.includeLinksInRenderedHTML = value;
+            await save();
+          });
+        return toggle;
+      });
+  }
+
+  new Setting(container)
+    .setName('Link Recursion Depth')
+    .setDesc('How many levels of linked notes to include. 1 = only directly linked notes, 2 = also include notes linked from those notes, etc.')
+    .addSlider((slider) => {
+      slider
+        .setLimits(1, 3, 1)
+        .setValue(plugin.settings.linkRecursionDepth || 1)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          plugin.settings.linkRecursionDepth = value;
+          await save();
+        });
+      return slider;
     });
 }
 

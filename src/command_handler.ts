@@ -129,7 +129,7 @@ export class CommandHandler {
     }
 
     // Shared conversation-mode handler for both Above and Below commands using line boundaries
-    private async handleDirectionalConversation(editor: Editor, direction: Direction): Promise<void> {
+    private async handleDirectionalConversation(editor: Editor, direction: Direction, view: MarkdownView): Promise<void> {
         if (this.abortController) {
             new Notice('A response is already in progress. Please stop it first.');
             return;
@@ -138,8 +138,9 @@ export class CommandHandler {
         const signal = this.abortController.signal;
 
         try {
-            const provider = new AIProviderWrapper(this.plugin.settings);
+            const provider = new AIProviderWrapper(this.plugin.settings, (this.plugin as any).app);
             const requestStart = new Date();
+            const currentFile = view.file; // Get the current file from the view
 
             const cursor = editor.getCursor();
             const currentLineStartPos = { line: cursor.line, ch: 0 };
@@ -211,9 +212,9 @@ export class CommandHandler {
             // Use conversation context if available, otherwise use simple prompt
             if (conversation.length > 0) {
                 const conversationMessages = this.buildConversationMessages(conversation, provider);
-                await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback);
+                await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback, currentFile || undefined);
             } else {
-                await provider.getStreamingResponse(queryText, onUpdate, signal, recordingCallback);
+                await provider.getStreamingResponse(queryText, onUpdate, signal, recordingCallback, currentFile || undefined);
             }
 
             // After streaming completes, optionally record the call using captured messages
@@ -266,7 +267,7 @@ export class CommandHandler {
 
         // Handle conversation mode when nothing is selected
         if (!selection) {
-            await this.handleDirectionalConversation(editor, 'below');
+            await this.handleDirectionalConversation(editor, 'below', view);
             return;
         }
 
@@ -279,9 +280,10 @@ export class CommandHandler {
         const signal = this.abortController.signal;
 
         try {
-            const provider = new AIProviderWrapper(this.plugin.settings);
+            const provider = new AIProviderWrapper(this.plugin.settings, (this.plugin as any).app);
             const initialContent = selection + this.plugin.settings.chatSeparator;
             const requestStart = new Date();
+            const currentFile = view.file; // Get the current file from the view
             
             // Get the selection range before replacing
             const selectionStart = editor.getCursor('from');
@@ -322,7 +324,7 @@ export class CommandHandler {
                 recordedOptions = options;
             };
 
-            await provider.getStreamingResponse(selection, onUpdate, signal, recordingCallback);
+            await provider.getStreamingResponse(selection, onUpdate, signal, recordingCallback, currentFile || undefined);
 
             // After streaming completes, optionally record the call using captured messages
             if (this.plugin.settings.recordApiCalls && recordedMessages.length > 0) {
@@ -443,7 +445,7 @@ export class CommandHandler {
 
             // If separator-mode not detected, try conversation mode
             if (!separatorMode) {
-                await this.handleDirectionalConversation(editor, 'above');
+                await this.handleDirectionalConversation(editor, 'above', view);
                 return;
             }
         }
@@ -457,8 +459,9 @@ export class CommandHandler {
             const signal = this.abortController.signal;
 
             try {
-                const provider = new AIProviderWrapper(this.plugin.settings);
+                const provider = new AIProviderWrapper(this.plugin.settings, (this.plugin as any).app);
                 const requestStart = new Date();
+                const currentFile = view.file; // Get the current file from the view
 
                 // Determine mode and setup accordingly
                 let conversationMode = false;
@@ -553,10 +556,10 @@ export class CommandHandler {
                 // Make API call based on mode
                 if (conversationMode && conversation.length > 0) {
                     const conversationMessages = this.buildConversationMessages(conversation, provider);
-                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback);
+                    await provider.getStreamingResponseWithConversation(conversationMessages, onUpdate, signal, recordingCallback, currentFile || undefined);
                 } else {
                     const promptText = selection || queryText;
-                    await provider.getStreamingResponse(promptText, onUpdate, signal, recordingCallback);
+                    await provider.getStreamingResponse(promptText, onUpdate, signal, recordingCallback, currentFile || undefined);
                 }
 
                 // After streaming completes, optionally record the call using captured messages

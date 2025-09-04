@@ -120,7 +120,8 @@ describe('CommandHandler', () => {
             selection,
             expect.any(Function),
             expect.any(AbortSignal),
-            expect.any(Function)
+            expect.any(Function),
+            undefined // currentFile parameter (view.file is null in test)
         );
         expect(mockEditor.replaceRange).toHaveBeenCalledTimes(2);
         expect(mockEditor.setCursor).toHaveBeenCalledTimes(2);
@@ -445,7 +446,8 @@ describe('CommandHandler', () => {
                 ]), 
                 expect.any(Function), 
                 expect.any(AbortSignal),
-                expect.any(Function)
+                expect.any(Function),
+                undefined // currentFile parameter (view.file is null in test)
             );
         });
 
@@ -468,7 +470,8 @@ describe('CommandHandler', () => {
                 plainText.trim(),
                 expect.any(Function), 
                 expect.any(AbortSignal),
-                expect.any(Function)
+                expect.any(Function),
+                undefined // currentFile parameter (view.file is null in test)
             );
         });
 

@@ -9,6 +9,7 @@ import { AIProviderWrapper } from './aiprovider';
 import { zipOldAiCalls } from './archiveCalls';
 import { renderModelSettingsSection, type PluginLike } from './ui/model_settings_shared';
 import { renderCoreConfigSection } from './ui/ai_bot_config_shared';
+import { renderNoteExclusionsSettings } from './services/content_retrieval';
 
 export interface VaultBotPluginSettings {
 	apiProvider: string;
@@ -16,6 +17,14 @@ export interface VaultBotPluginSettings {
 	aiProviderSettings: Record<string, AIProviderSettings>;
 	recordApiCalls: boolean;
 	includeDatetime?: boolean;
+	includeCurrentNote?: boolean;
+	includeOpenNotes?: boolean;
+	includeLinkedNotes?: boolean;
+	extractNotesInReadingView?: boolean;
+	includeLinksInRenderedHTML?: boolean;
+	linkRecursionDepth?: number;
+	noteExclusionsLevel1?: string[];
+	noteExclusionsDeepLink?: string[];
 }
 
 export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
@@ -23,6 +32,14 @@ export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
 	chatSeparator: '\n\n----\n\n',
 	recordApiCalls: true,
 	includeDatetime: true,
+	includeCurrentNote: true,
+	includeOpenNotes: false,
+	includeLinkedNotes: true,
+	extractNotesInReadingView: false,
+	includeLinksInRenderedHTML: false,
+	linkRecursionDepth: 1,
+	noteExclusionsLevel1: [],
+	noteExclusionsDeepLink: [],
 	aiProviderSettings: {
 		openai: {
 			api_key: '',
@@ -80,6 +97,12 @@ export class VaultBotSettingTab extends PluginSettingTab {
 		
 		// Render shared model settings section
 		renderModelSettingsSection(modelSettingsContainer, this.plugin as unknown as PluginLike, saver);
+
+		// Create separate container for note exclusions settings
+		const noteExclusionsContainer = containerEl.createDiv();
+		
+		// Render note exclusions settings
+		renderNoteExclusionsSettings(noteExclusionsContainer, this.plugin as unknown as PluginLike, saver);
 
 		// Settings-specific: API Key test button (add after the shared API key field)
 		new Setting(containerEl)
