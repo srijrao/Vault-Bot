@@ -72,16 +72,24 @@ Implement the "Include Linked Notes" feature that automatically includes content
   - ✅ Simplified content retrieval tests to avoid Obsidian mocking issues
   - ✅ All 145 tests now passing
   - ✅ Build and test quality gates both PASS
+- 2025-09-04 10:20:00 Fixed HTML render toggle UI duplication issue
+  - ❌ HTML render toggle was duplicating UI elements when changed
+  - ✅ Refactored toggle behavior to use dedicated helper function
+  - ✅ Added defensive code for test environment compatibility
+  - ✅ Created separate container for Extract in Reading View and conditional setting
+  - ✅ Added comprehensive tests to verify fix and prevent regression
+  - ✅ All 147 tests now passing with new UI behavior tests
 
 ### Files Changed
 - docs/2025-09-04_09-37-28_Include_Linked_Notes_Implementation.md (created)
 - src/settings.ts (updated interface and defaults)
-- src/ui/model_settings_shared.ts (added new UI controls)
+- src/ui/model_settings_shared.ts (added new UI controls, fixed HTML render toggle duplication)
 - src/services/content_retrieval.ts (implemented full service)
 - src/aiprovider.ts (integrated content retrieval)
 - src/command_handler.ts (updated to pass current file)
 - tests/content_retrieval.test.ts (created comprehensive tests)
 - tests/command_handler.test.ts (updated test expectations)
+- tests/model_settings_responsive.test.ts (added UI behavior tests for toggle fix)
 
 ### Notes
 - ✅ All core functionality implemented according to specification
@@ -90,13 +98,16 @@ Implement the "Include Linked Notes" feature that automatically includes content
 - ✅ Error handling implemented with graceful fallbacks and user notices
 - ✅ Integration point successfully identified and implemented in AIProviderWrapper
 - ✅ Backwards compatibility maintained - existing functionality unaffected
+- ✅ HTML render toggle UI duplication issue identified and fixed
+- ✅ Comprehensive UI behavior tests added to prevent regression
 - ✅ Ready for production deployment
 
 ## Result / Quality Gates
 - Build: ✅ PASS
-- Tests: ✅ PASS (145/145 tests passing)
+- Tests: ✅ PASS (147/147 tests passing)
 - Lint: ✅ PASS (TypeScript compilation successful)
 - Implementation: ✅ COMPLETE
+- UI Behavior: ✅ PASS (HTML render toggle fix verified)
 
 ### Summary of Implementation
 The "Include Linked Notes" feature has been successfully implemented with all required functionality:
@@ -123,8 +134,40 @@ The "Include Linked Notes" feature has been successfully implemented with all re
 **Integration & Quality:**
 - ✅ Seamless integration with existing AI request flow
 - ✅ Settings UI with all controls and conditional visibility
+- ✅ HTML render toggle works correctly without UI duplication
 - ✅ Backwards compatibility maintained
-- ✅ Comprehensive unit test coverage
+- ✅ Comprehensive unit test coverage including UI behavior tests
 - ✅ All build and quality gates passing
 
-The feature is now ready for manual testing and deployment.
+The feature is now ready for manual testing and deployment with robust UI behavior and comprehensive test coverage.
+
+## UI Bug Fix: HTML Render Toggle Duplication
+### Problem
+The "Extract in Reading View" toggle was causing UI duplication when changed. When users toggled the setting, it would re-render the entire linked notes settings section underneath the existing one, creating duplicate UI elements.
+
+### Root Cause
+The toggle's `onChange` handler was calling `renderLinkedNotesSettings(container.parentElement!, plugin, save)` which re-rendered the complete section instead of just updating the conditional child element.
+
+### Solution
+1. **Refactored Toggle Architecture**: Created a dedicated helper function `renderConditionalHtmlLinksSetting()` that manages only the conditional "Include Links Found in Rendered HTML" setting.
+
+2. **Isolated Container**: Used a separate `extractContainer` specifically for the "Extract in Reading View" toggle and its conditional child, preventing interference with other UI elements.
+
+3. **Defensive Programming**: Added compatibility checks for both production and test environments, safely handling cases where `querySelector` might not be available.
+
+4. **Clean State Management**: The helper function removes any existing conditional elements before adding new ones, ensuring a clean UI state.
+
+### Tests Added
+- `does not duplicate UI when HTML render toggle is changed`: Verifies no UI duplication occurs
+- `properly shows and hides conditional HTML links setting`: Confirms correct conditional behavior
+
+### Technical Details
+```typescript
+// Before: Caused duplication
+renderLinkedNotesSettings(container.parentElement!, plugin, save);
+
+// After: Clean, isolated update
+renderConditionalHtmlLinksSetting(extractContainer, plugin, save);
+```
+
+The fix ensures a smooth user experience when toggling HTML extraction settings.

@@ -135,25 +135,25 @@ function renderModelSelector(
   // Function to populate dropdown
   const populateDropdown = (modelList: ModelInfo[], selectedModel: string) => {
     dropdown.empty();
-    
+
     // Add manual input option
-    const manualOption = dropdown.createEl('option', { 
-      value: '__manual__', 
-      text: '✏️ Enter manually...' 
+    const manualOption = dropdown.createEl('option', {
+      value: '__manual__',
+      text: '✏️ Enter manually...'
     });
-    
+
     if (modelList.length === 0) {
-      const loadingOption = dropdown.createEl('option', { 
-        value: '__loading__', 
-        text: loadingModels ? '⏳ Loading models...' : '❌ Failed to load models' 
+      const loadingOption = dropdown.createEl('option', {
+        value: '__loading__',
+        text: loadingModels ? '⏳ Loading models...' : '❌ Failed to load models'
       });
     } else {
-      
+
       // Add model options
       modelList.forEach(model => {
-        dropdown.createEl('option', { 
-          value: model.id, 
-          text: model.name 
+        dropdown.createEl('option', {
+          value: model.id,
+          text: model.name
         });
       });
     }
@@ -169,11 +169,11 @@ function renderModelSelector(
   // Function to show manual input
   const showManualInput = () => {
     controlContainer.empty();
-    
+
     // Recreate the layout structure for manual input
     const inputRow = controlContainer.createDiv({ cls: 'vault-bot-model-input-row' });
-    
-    const textInput = inputRow.createEl('input', { 
+
+    const textInput = inputRow.createEl('input', {
       type: 'text',
       value: providerSettings.model,
       placeholder: `e.g. ${providerName === 'OpenAI' ? 'gpt-4o' : 'openai/gpt-4o'}`
@@ -192,15 +192,15 @@ function renderModelSelector(
 
     backButton.addEventListener('click', () => {
       controlContainer.empty();
-      
+
       // Recreate the original layout
       const dropdownRow = controlContainer.createDiv({ cls: 'vault-bot-model-dropdown-row' });
       dropdownRow.appendChild(dropdown);
-      
+
       const buttonRow = controlContainer.createDiv({ cls: 'vault-bot-model-button-row' });
       buttonRow.appendChild(searchButton);
       buttonRow.appendChild(refreshButton);
-      
+
       populateDropdown(models, providerSettings.model);
     });
 
@@ -220,7 +220,7 @@ function renderModelSelector(
   // Search button handler
   searchButton.addEventListener('click', () => {
     if (models.length === 0) return;
-    
+
     const modal = new FuzzyModelDropdown(
       (plugin as any).app,
       models,
@@ -239,7 +239,7 @@ function renderModelSelector(
     populateDropdown([], providerSettings.model);
     refreshButton.disabled = true;
     refreshButton.textContent = '⏳';
-    
+
     try {
       models = await modelService.getModels(plugin.settings, true);
       populateDropdown(models, providerSettings.model);
@@ -253,7 +253,7 @@ function renderModelSelector(
   // Initial load
   loadingModels = true;
   populateDropdown([], providerSettings.model);
-  
+
   modelService.getModels(plugin.settings).then(fetchedModels => {
     models = fetchedModels;
     loadingModels = false;
@@ -281,6 +281,46 @@ function renderDateTimeToggle(
         });
       return toggle;
     });
+}
+
+// Helper function to render the conditional HTML links setting
+function renderConditionalHtmlLinksSetting(
+  extractContainer: HTMLElement,
+  plugin: PluginLike,
+  save: (immediate?: boolean) => Promise<void> | void
+) {
+  // Remove any existing conditional setting safely
+  if (extractContainer.querySelector) {
+    const existingConditional = extractContainer.querySelector('.vault-bot-conditional-html-links');
+    if (existingConditional) {
+      existingConditional.remove();
+    }
+  } else {
+    // Fallback for test environments - remove all elements with the expected class
+    const children = Array.from(extractContainer.children || []);
+    children.forEach(child => {
+      if ((child as any).classList && (child as any).classList.contains('vault-bot-conditional-html-links')) {
+        child.remove();
+      }
+    });
+  }
+
+  // Add the conditional setting if extractNotesInReadingView is enabled
+  if (plugin.settings.extractNotesInReadingView) {
+    const conditionalDiv = extractContainer.createDiv({ cls: 'vault-bot-conditional-html-links' });
+    new Setting(conditionalDiv)
+      .setName('Include Links Found in Rendered HTML')
+      .setDesc('When extracting notes in reading view, also scan the rendered HTML for additional links to include.')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(plugin.settings.includeLinksInRenderedHTML === true)
+          .onChange(async (value) => {
+            plugin.settings.includeLinksInRenderedHTML = value;
+            await save();
+          });
+        return toggle;
+      });
+  }
 }
 
 function renderLinkedNotesSettings(
@@ -353,7 +393,10 @@ function renderLinkedNotesSettings(
       return toggle;
     });
 
-  new Setting(container)
+  // Create a container for the Extract in Reading View setting and its conditional child
+  const extractContainer = container.createDiv();
+
+  new Setting(extractContainer)
     .setName('Extract in Reading View')
     .setDesc('Render included notes to HTML and extract text content instead of using raw markdown.')
     .addToggle((toggle) => {
@@ -362,27 +405,14 @@ function renderLinkedNotesSettings(
         .onChange(async (value) => {
           plugin.settings.extractNotesInReadingView = value;
           await save();
-          // Re-render to show/hide conditional settings
-          renderLinkedNotesSettings(container.parentElement!, plugin, save);
+          // Re-render just the conditional setting
+          renderConditionalHtmlLinksSetting(extractContainer, plugin, save);
         });
       return toggle;
     });
 
-  // Conditional setting - only show if extractNotesInReadingView is enabled
-  if (plugin.settings.extractNotesInReadingView) {
-    new Setting(container)
-      .setName('Include Links Found in Rendered HTML')
-      .setDesc('When extracting notes in reading view, also scan the rendered HTML for additional links to include.')
-      .addToggle((toggle) => {
-        toggle
-          .setValue(plugin.settings.includeLinksInRenderedHTML === true)
-          .onChange(async (value) => {
-            plugin.settings.includeLinksInRenderedHTML = value;
-            await save();
-          });
-        return toggle;
-      });
-  }
+  // Render the conditional setting initially
+  renderConditionalHtmlLinksSetting(extractContainer, plugin, save);
 
   new Setting(container)
     .setName('Link Recursion Depth')

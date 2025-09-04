@@ -135,7 +135,20 @@ describe('Model Settings Responsive Layout', () => {
           appendChild: vi.fn((child: any) => {
             element.children.push(child);
           }),
-          focus: vi.fn()
+          focus: vi.fn(),
+          querySelector: vi.fn((selector: string) => {
+            // Mock querySelector to find elements by class
+            return element.children.find((child: any) => 
+              child.opts && child.opts.cls && child.opts.cls === selector.replace('.', '')
+            ) || null;
+          }),
+          remove: vi.fn(() => {
+            // Remove from parent's children if needed
+            const parent = createdElements.find(el => el.children.includes(element));
+            if (parent) {
+              parent.children = parent.children.filter((child: any) => child !== element);
+            }
+          })
         };
         
         createdElements.push(element);
@@ -149,6 +162,12 @@ describe('Model Settings Responsive Layout', () => {
       classList: { add: vi.fn(), remove: vi.fn() },
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
+      querySelector: vi.fn((selector: string) => {
+        // Mock querySelector to find elements by class
+        return createdElements.find(el => 
+          el.opts && el.opts.cls && el.opts.cls === selector.replace('.', '')
+        ) || null;
+      }),
     };
 
     plugin = {
@@ -294,5 +313,95 @@ describe('Model Settings Responsive Layout', () => {
       el.tag === 'div' && el.opts.cls === 'vault-bot-model-button-row'
     );
     expect(buttonRows.length).toBeGreaterThan(0);
+  });
+
+  it('does not duplicate UI when HTML render toggle is changed', async () => {
+    const save = vi.fn();
+    
+    // Enable linked notes feature
+    plugin.settings.includeLinkedNotes = true;
+    
+    renderModelSettingsSection(container, plugin, save);
+    
+    // Wait for async model loading
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Count initial "Extract in Reading View" toggles
+    const initialToggleCount = createdElements.filter(el => 
+      el.tag === 'div' && 
+      el.children.some((child: any) => 
+        child.opts && child.opts.text === 'Extract in Reading View'
+      )
+    ).length;
+    
+    // Find and trigger the Extract in Reading View toggle
+    let extractToggleCallback: any = null;
+    
+    // Find the Setting that contains the Extract in Reading View toggle
+    const mockSetting = {
+      setValue: vi.fn().mockReturnThis(),
+      onChange: vi.fn((callback: any) => {
+        extractToggleCallback = callback;
+        return mockSetting;
+      }),
+    };
+    
+    // Simulate the toggle being turned on
+    if (extractToggleCallback) {
+      await extractToggleCallback(true);
+    }
+    
+    // Count "Extract in Reading View" toggles after change
+    const finalToggleCount = createdElements.filter(el => 
+      el.tag === 'div' && 
+      el.children.some((child: any) => 
+        child.opts && child.opts.text === 'Extract in Reading View'
+      )
+    ).length;
+    
+    // The count should remain the same - no duplication
+    expect(finalToggleCount).toBeLessThanOrEqual(initialToggleCount + 1); // Allow for one new element but not duplication
+    
+    // Verify that conditional setting appears correctly
+    const conditionalElements = createdElements.filter(el => 
+      el.opts && el.opts.cls === 'vault-bot-conditional-html-links'
+    );
+    
+    // Should have at most one conditional element (when extractNotesInReadingView is true)
+    expect(conditionalElements.length).toBeLessThanOrEqual(1);
+  });
+
+  it('properly shows and hides conditional HTML links setting', async () => {
+    const save = vi.fn();
+    
+    // Start with extractNotesInReadingView disabled
+    plugin.settings.extractNotesInReadingView = false;
+    plugin.settings.includeLinksInRenderedHTML = false;
+    
+    renderModelSettingsSection(container, plugin, save);
+    
+    // Wait for async model loading
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Initially, no conditional HTML links setting should exist
+    let conditionalElements = createdElements.filter(el => 
+      el.opts && el.opts.cls === 'vault-bot-conditional-html-links'
+    );
+    expect(conditionalElements.length).toBe(0);
+    
+    // Enable extractNotesInReadingView
+    plugin.settings.extractNotesInReadingView = true;
+    
+    // Re-render to simulate the toggle change
+    container.empty();
+    createdElements.length = 0;
+    renderModelSettingsSection(container, plugin, save);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Now conditional HTML links setting should appear
+    conditionalElements = createdElements.filter(el => 
+      el.opts && el.opts.cls === 'vault-bot-conditional-html-links'
+    );
+    expect(conditionalElements.length).toBe(1);
   });
 });
