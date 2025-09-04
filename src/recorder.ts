@@ -258,6 +258,13 @@ export function resolveAiCallsDir(appLike?: any): string {
       return path.join(basePath, '.obsidian', 'plugins', 'Vault-Bot', 'ai-calls');
     }
   } catch {}
-  // Fallback: current working directory ai-calls
-  return path.resolve('ai-calls');
+  
+  // Check if we're in a test environment
+  const isTestEnv = process.env.NODE_ENV === 'test' || 
+                   process.env.VITEST === 'true' || 
+                   typeof global !== 'undefined' && (global as any).__vitest__ ||
+                   typeof globalThis !== 'undefined' && (globalThis as any).__vitest__;
+  
+  // Fallback: use ai-calls-test during tests, ai-calls otherwise
+  return path.resolve(isTestEnv ? 'ai-calls-test' : 'ai-calls');
 }

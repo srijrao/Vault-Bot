@@ -1,5 +1,4 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice, Modal } from 'obsidian';
-import { openAiBotConfigModal } from './prompt_modal';
 import { resolveAiCallsDir } from './recorder';
 import * as fs from 'fs';
 import * as path from 'path';

@@ -9,6 +9,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    env: {
+      NODE_ENV: 'test'
+    }
   },
   resolve: {
     alias: {
