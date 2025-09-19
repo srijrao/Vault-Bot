@@ -145,9 +145,23 @@ export class OpenRouterProvider implements AIProvider {
                     abortSignal: signal
                 });
 
+                // Handle streaming with error recovery
+                let hasReceivedData = false;
+                
                 for await (const textPart of textStream) {
-                    onUpdate(textPart);
+                    hasReceivedData = true;
+                    
+                    // Ensure textPart is a string and not empty
+                    if (typeof textPart === 'string' && textPart.length > 0) {
+                        onUpdate(textPart);
+                    }
                 }
+                
+                // If no data was received, this might indicate a streaming issue
+                if (!hasReceivedData) {
+                    console.warn('OpenRouter streaming completed but no data was received. This may indicate a model-specific issue.');
+                }
+                
                 return;
             } catch (error: any) {
                 // Check if it's a temperature-related error
@@ -168,7 +182,9 @@ export class OpenRouterProvider implements AIProvider {
                     });
 
                     for await (const textPart of textStream) {
-                        onUpdate(textPart);
+                        if (typeof textPart === 'string' && textPart.length > 0) {
+                            onUpdate(textPart);
+                        }
                     }
                     return;
                 }
@@ -182,6 +198,12 @@ export class OpenRouterProvider implements AIProvider {
             if (error.name === 'AbortError') {
                 console.log('OpenRouter request was aborted.');
                 return; // Gracefully handle abort
+            }
+            
+            // Check for specific OpenRouter streaming errors
+            if (error.message?.includes('stream') || error.message?.includes('chunk')) {
+                console.error('OpenRouter streaming error detected:', error.message);
+                throw new Error(`OpenRouter streaming failed: ${error.message}`);
             }
             
             console.error('Error in OpenRouter API request:', error);
