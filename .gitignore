@@ -24,3 +24,4 @@ data.json
 ai-calls/*
 ai-calls-test/*
 docs/template.md
+chats/*.json
