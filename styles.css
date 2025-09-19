@@ -64,32 +64,54 @@ If your plugin does not need CSS, delete this file.
   flex-wrap: wrap;
 }
 
+/* Toggle switch for reading/source mode */
 .chat-view-toggle-group {
   display: flex;
-  gap: 0.25rem;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  overflow: hidden;
+  align-items: center;
+  gap: 0.5rem;
   margin-right: 0.5rem;
 }
 
-.chat-view-toggle-button {
-  padding: 0.35rem 0.7rem;
-  border: none;
-  background: var(--background-primary);
-  color: var(--text-normal);
+.chat-view-toggle-switch {
+  position: relative;
+  width: 50px;
+  height: 24px;
+  background: var(--background-modifier-border);
+  border-radius: 12px;
   cursor: pointer;
-  font-size: 0.85em;
-  transition: all 0.2s ease;
+  transition: background-color 0.3s ease;
 }
 
-.chat-view-toggle-button:hover {
-  background: var(--background-primary-alt);
-}
-
-.chat-view-toggle-button.active {
+.chat-view-toggle-switch.active {
   background: var(--interactive-accent);
-  color: var(--text-on-accent);
+}
+
+.chat-view-toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: var(--background-primary);
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.chat-view-toggle-switch.active .chat-view-toggle-slider {
+  transform: translateX(26px);
+}
+
+.chat-view-toggle-label {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.chat-view-toggle-label.active {
+  color: var(--text-normal);
+  font-weight: 500;
 }
 
 .chat-control-button {
@@ -320,53 +342,38 @@ If your plugin does not need CSS, delete this file.
   border: 1px solid var(--background-modifier-border);
 }
 
-.chat-message-text.reading-mode h1,
-.chat-message-text.reading-mode h2,
-.chat-message-text.reading-mode h3,
-.chat-message-text.reading-mode h4,
-.chat-message-text.reading-mode h5,
-.chat-message-text.reading-mode h6 {
-  margin: 1em 0 0.5em 0;
-  font-weight: 600;
+/* Reading mode: Keep horizontal padding but remove vertical spacing */
+.chat-message-text.reading-mode {
+  padding: 0 0.75rem !important; /* Keep left/right padding, remove top/bottom */
+  margin: 0 !important;
+  white-space: normal !important; /* Override pre-wrap for reading mode */
 }
 
-.chat-message-text.reading-mode p {
-  margin-bottom: 1em;
+.chat-message-text.reading-mode > * {
+  /* Completely reset all spacing for child elements */
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-.chat-message-text.reading-mode ul,
-.chat-message-text.reading-mode ol {
-  margin: 0.5em 0;
-  padding-left: 1.5em;
+/* Only add minimal spacing between specific block elements */
+.chat-message-text.reading-mode > p:not(:last-child) {
+  margin-bottom: 0.25em !important;
 }
 
-.chat-message-text.reading-mode code {
-  background: var(--background-primary-alt);
-  padding: 0.2em 0.4em;
-  border-radius: 3px;
-  font-family: var(--font-monospace);
-  font-size: 0.9em;
+.chat-message-text.reading-mode > h1:not(:last-child),
+.chat-message-text.reading-mode > h2:not(:last-child),
+.chat-message-text.reading-mode > h3:not(:last-child),
+.chat-message-text.reading-mode > h4:not(:last-child),
+.chat-message-text.reading-mode > h5:not(:last-child),
+.chat-message-text.reading-mode > h6:not(:last-child) {
+  margin-bottom: 0.5em !important;
 }
 
-.chat-message-text.reading-mode pre {
-  background: var(--background-primary-alt);
-  padding: 1em;
-  border-radius: 4px;
-  overflow-x: auto;
-  margin: 1em 0;
-}
-
-.chat-message-text.reading-mode pre code {
-  background: none;
-  padding: 0;
-}
-
-.chat-message-text.reading-mode blockquote {
-  border-left: 3px solid var(--interactive-accent);
-  padding-left: 1em;
-  margin: 1em 0;
-  color: var(--text-muted);
-  font-style: italic;
+.chat-message-text.reading-mode > ul:not(:last-child),
+.chat-message-text.reading-mode > ol:not(:last-child),
+.chat-message-text.reading-mode > blockquote:not(:last-child),
+.chat-message-text.reading-mode > pre:not(:last-child) {
+  margin-bottom: 0.5em !important;
 }
 
 .chat-message-action {

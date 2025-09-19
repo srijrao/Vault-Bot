@@ -93,3 +93,29 @@ All requested chat view improvements have been successfully implemented:
 9. **AI Call Recording**: Chat interactions properly recorded like other AI calls
 
 The implementation maintains code quality standards and passes all existing tests while adding the new functionality.
+
+## Bug Fixes (2025-09-19 14:00:00)
+### Fixed Issues:
+1. **Extra newlines in reading mode**: Removed excessive CSS margins that were doubling the spacing added by Obsidian's MarkdownRenderer
+2. **Improved toggle UI**: Replaced separate Reading/Source buttons with a proper toggle switch component with labels for better UX
+3. **Excessive padding in reading view**: Completely removed all padding and margins from HTML rendering in reading mode for compact display
+4. **Fine-tuned spacing**: Added back left/right padding while eliminating extra line spacing between elements that don't have newlines in source
+5. **Model name not updating**: Fixed model name display not refreshing when AI provider or model settings are changed
+6. **Double newlines in reading view**: Fixed CSS conflicts and white-space handling that caused two newlines after each line in reading mode
+
+### Changes Made:
+- **styles.css**: 
+  - Updated reading mode CSS to let MarkdownRenderer handle spacing naturally
+  - Created new toggle switch styling with proper visual feedback
+  - Applied targeted spacing reset - keeping horizontal padding (0.75rem) while removing vertical margins
+  - Used specific selectors to only add spacing between actual block elements, not inline content
+  - Fixed CSS rule conflicts that were causing double spacing in reading mode
+  - Added `white-space: normal` override for reading mode to prevent pre-wrap from interfering with markdown rendering
+- **src/chat/chat_view.ts**: 
+  - Replaced separate button elements with unified toggle switch component, updated state management
+  - Added `refreshModelInfo()` public method and stored reference to model info element
+  - Updated `updateModelInfo()` to work without parameters using stored element reference
+- **main.ts**: 
+  - Modified `saveSettings()` to automatically refresh chat view model info when settings change
+  - Added logic to find open chat views and call their refresh method
+- **Quality**: All 164 tests passing, build successful

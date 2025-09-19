@@ -44,8 +44,9 @@ export class ChatView extends ItemView {
   private inputTextarea: HTMLTextAreaElement;
   private sendButton: HTMLButtonElement;
   private stopButton: HTMLButtonElement;
-  private readingModeBtn: HTMLButtonElement;
-  private sourceModeBtn: HTMLButtonElement;
+  private toggleSwitch: HTMLElement;
+  private toggleLabels: HTMLElement;
+  private modelInfoEl: HTMLElement;
 
   constructor(leaf: WorkspaceLeaf, plugin: VaultBotPlugin) {
     super(leaf);
@@ -111,8 +112,8 @@ export class ChatView extends ItemView {
    */
   private createHeaderControls(): void {
     // Model info (faded text at top)
-    const modelInfoEl = this.headerEl.createDiv('chat-view-model-info');
-    this.updateModelInfo(modelInfoEl);
+    this.modelInfoEl = this.headerEl.createDiv('chat-view-model-info');
+    this.updateModelInfo();
 
     // Header row with title and main controls
     const headerRowEl = this.headerEl.createDiv('chat-view-header-row');
@@ -127,21 +128,31 @@ export class ChatView extends ItemView {
     // Rendering mode toggle group
     const toggleGroupEl = controlsEl.createDiv('chat-view-toggle-group');
     
-    const readingBtn = toggleGroupEl.createEl('button', {
+    // Left label (Reading)
+    const readingLabelEl = toggleGroupEl.createSpan({
       text: 'Reading',
-      cls: 'chat-view-toggle-button active'
+      cls: 'chat-view-toggle-label active'
     });
-    readingBtn.onclick = () => this.setRenderingMode('reading');
-
-    const sourceBtn = toggleGroupEl.createEl('button', {
+    
+    // Toggle switch
+    const toggleSwitchEl = toggleGroupEl.createDiv('chat-view-toggle-switch');
+    const toggleSliderEl = toggleSwitchEl.createDiv('chat-view-toggle-slider');
+    
+    // Right label (Source)  
+    const sourceLabelEl = toggleGroupEl.createSpan({
       text: 'Source',
-      cls: 'chat-view-toggle-button'
+      cls: 'chat-view-toggle-label'
     });
-    sourceBtn.onclick = () => this.setRenderingMode('source');
-
-    // Store references to toggle buttons
-    this.readingModeBtn = readingBtn;
-    this.sourceModeBtn = sourceBtn;
+    
+    // Store references
+    this.toggleSwitch = toggleSwitchEl;
+    this.toggleLabels = toggleGroupEl;
+    
+    // Click handler for the entire toggle group
+    toggleSwitchEl.onclick = () => {
+      const newMode = this.renderingMode === 'reading' ? 'source' : 'reading';
+      this.setRenderingMode(newMode);
+    };
 
     // New chat button
     const newChatBtn = controlsEl.createEl('button', {
@@ -563,12 +574,12 @@ export class ChatView extends ItemView {
   /**
    * Update model info display
    */
-  private updateModelInfo(modelInfoEl: HTMLElement): void {
+  private updateModelInfo(): void {
     const provider = this.plugin.settings.apiProvider;
     const settings = this.plugin.settings.aiProviderSettings[provider];
     const model = settings && 'model' in settings ? (settings as any).model : 'Unknown';
     
-    modelInfoEl.textContent = `${provider.toUpperCase()} - ${model}`;
+    this.modelInfoEl.textContent = `${provider.toUpperCase()} - ${model}`;
   }
 
   /**
@@ -577,9 +588,15 @@ export class ChatView extends ItemView {
   private setRenderingMode(mode: 'reading' | 'source'): void {
     this.renderingMode = mode;
     
-    // Update button states
-    this.readingModeBtn.classList.toggle('active', mode === 'reading');
-    this.sourceModeBtn.classList.toggle('active', mode === 'source');
+    // Update toggle switch state
+    this.toggleSwitch.classList.toggle('active', mode === 'source');
+    
+    // Update label states
+    const labels = this.toggleLabels.querySelectorAll('.chat-view-toggle-label');
+    labels.forEach((label, index) => {
+      const isActive = (index === 0 && mode === 'reading') || (index === 1 && mode === 'source');
+      label.classList.toggle('active', isActive);
+    });
     
     // Update all existing message components
     for (const component of this.messageComponents.values()) {
@@ -926,6 +943,15 @@ export class ChatView extends ItemView {
   /**
    * Cleanup resources
    */
+  /**
+   * Refresh the model info display (called when settings change)
+   */
+  public refreshModelInfo(): void {
+    if (this.modelInfoEl) {
+      this.updateModelInfo();
+    }
+  }
+
   private cleanup(): void {
     if (this.state.abortController) {
       this.state.abortController.abort();

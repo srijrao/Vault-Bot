@@ -111,6 +111,13 @@ export default class VaultBotPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 		this.commandHandler.onSettingsChanged();
+		
+		// Refresh chat view if it's open
+		const chatLeaves = this.app.workspace.getLeavesOfType(CHAT_VIEW_TYPE);
+		if (chatLeaves.length > 0) {
+			const chatView = chatLeaves[0].view as ChatView;
+			chatView.refreshModelInfo();
+		}
 	}
 }
 
