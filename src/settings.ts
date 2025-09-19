@@ -10,6 +10,7 @@ import { zipOldAiCalls } from './archiveCalls';
 import { renderModelSettingsSection, type PluginLike } from './ui/model_settings_shared';
 import { renderCoreConfigSection } from './ui/ai_bot_config_shared';
 import { renderNoteExclusionsSettings } from './services/content_retrieval';
+import { openChatView } from './chat/chat_view';
 
 export interface VaultBotPluginSettings {
 	apiProvider: string;
@@ -25,6 +26,7 @@ export interface VaultBotPluginSettings {
 	linkRecursionDepth?: number;
 	noteExclusionsLevel1?: string[];
 	noteExclusionsDeepLink?: string[];
+	chatDefaultSaveLocation?: string;
 	uiState?: {
 		collapsedSections?: Record<string, boolean>;
 	};
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
 	linkRecursionDepth: 1,
 	noteExclusionsLevel1: [],
 	noteExclusionsDeepLink: [],
+	chatDefaultSaveLocation: "",
 	aiProviderSettings: {
 		openai: {
 			api_key: '',
@@ -99,7 +102,9 @@ export class VaultBotSettingTab extends PluginSettingTab {
 		const modelSettingsContainer = containerEl.createDiv();
 		
 		// Render shared core configuration section
-		renderCoreConfigSection(coreConfigContainer, this.plugin as unknown as PluginLike, saver);
+		renderCoreConfigSection(coreConfigContainer, this.plugin as unknown as PluginLike, saver, () => {
+			openChatView(this.plugin as any);
+		});
 		
 		// Render shared model settings section
 		renderModelSettingsSection(modelSettingsContainer, this.plugin as unknown as PluginLike, saver);

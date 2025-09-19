@@ -18,6 +18,87 @@ export class OpenRouterProvider implements AIProvider {
         this.settings = settings;
     }
 
+    // Attempt to upload a data URI image to OpenRouter's upload endpoint if available.
+    async uploadImageFromDataURI?(dataUri: string, filename?: string): Promise<{ url?: string; id?: string } | null> {
+        try {
+            // Extract base64 payload and mime
+            const match = dataUri.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+            if (!match) return null;
+            const mime = match[1];
+            const base64 = match[2];
+
+            // OpenRouter doesn't have a stable public image upload API documented here.
+            // Try a generic upload endpoint on openrouter.ai if available.
+            const form = new FormData();
+            const blob = new Blob([Uint8Array.from(atob(base64), c => c.charCodeAt(0))], { type: mime });
+            form.append('file', blob, filename || `upload.${mime.split('/')[1]}`);
+
+            const resp = await fetch('https://openrouter.ai/api/v1/uploads', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.settings.api_key}`,
+                    ...(this.settings.site_url ? { 'HTTP-Referer': this.settings.site_url } : {}),
+                    ...(this.settings.site_name ? { 'X-Title': this.settings.site_name } : {})
+                },
+                body: form as any
+            });
+
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            // Expecting { url, id } or similar
+            return { url: data?.url || data?.file || null, id: data?.id || null };
+        } catch (error) {
+            console.warn('OpenRouter image upload failed:', error);
+            return null;
+        }
+    }
+
+    async uploadImageFromUrl?(url: string, filename?: string): Promise<{ url?: string; id?: string } | null> {
+        try {
+            // Attempt server-side fetch + upload via OpenRouter uploads endpoint
+            const resp = await fetch('https://openrouter.ai/api/v1/uploads', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.settings.api_key}`,
+                    ...(this.settings.site_url ? { 'HTTP-Referer': this.settings.site_url } : {}),
+                    ...(this.settings.site_name ? { 'X-Title': this.settings.site_name } : {})
+                },
+                body: JSON.stringify({ url })
+            });
+
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            return { url: data?.url || data?.file || null, id: data?.id || null };
+        } catch (error) {
+            console.warn('OpenRouter image upload from URL failed:', error);
+            return null;
+        }
+    }
+
+    async analyzeImage?(imageUrlOrId: string): Promise<{ text?: string; labels?: string[] } | null> {
+        try {
+            // OpenRouter doesn't specify a vision analyze endpoint; attempt to call a generic endpoint
+            const resp = await fetch('https://openrouter.ai/api/v1/vision/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.settings.api_key}`,
+                    ...(this.settings.site_url ? { 'HTTP-Referer': this.settings.site_url } : {}),
+                    ...(this.settings.site_name ? { 'X-Title': this.settings.site_name } : {})
+                },
+                body: JSON.stringify({ image: imageUrlOrId })
+            });
+
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            return { text: data?.text || null, labels: data?.labels || null };
+        } catch (error) {
+            console.warn('OpenRouter image analyze failed:', error);
+            return null;
+        }
+    }
+
     async getStreamingResponse(
         prompt: string,
         onUpdate: (text: string) => void,

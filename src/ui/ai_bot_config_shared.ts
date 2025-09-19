@@ -141,13 +141,50 @@ export function renderChatSeparatorField(
       }));
 }
 
+// Renders the Chat Default Save Location field.
+export function renderChatSaveLocationField(
+  container: HTMLElement,
+  plugin: PluginLike,
+  save: (immediate?: boolean) => Promise<void> | void
+) {
+  new Setting(container)
+    .setName('Chat Default Save Location')
+    .setDesc('Default folder for saving chat conversations to notes. Leave empty to save to vault root.')
+    .addText((text) => {
+      text
+        .setPlaceholder('chats/ (leave empty for vault root)')
+        .setValue(plugin.settings.chatDefaultSaveLocation || '')
+        .onChange(async (value) => {
+          plugin.settings.chatDefaultSaveLocation = value.trim();
+          await save();
+        });
+    });
+}
+
+// Renders the Open Chat View button.
+export function renderOpenChatViewButton(
+  container: HTMLElement,
+  onOpenChat: () => void
+) {
+  new Setting(container)
+    .setName('Open Chat View')
+    .setDesc('Open the AI chat interface in a dedicated view.')
+    .addButton((button) => {
+      button
+        .setButtonText('Open Chat')
+        .setCta()
+        .onClick(onOpenChat);
+    });
+}
+
 // Renders the complete Core AI Bot Configuration section (with header + all fields).
 // This function manages its own re-render cycle so Settings, Modal, and Side Panel can
 // import and display identical UI with a single call.
 export function renderCoreConfigSection(
   container: HTMLElement,
   plugin: PluginLike,
-  save: (immediate?: boolean) => Promise<void> | void
+  save: (immediate?: boolean) => Promise<void> | void,
+  onOpenChat?: () => void
 ) {
   const reRender = () => {
     container.empty();
@@ -156,6 +193,12 @@ export function renderCoreConfigSection(
     renderApiKeyField(container, plugin, save);
     renderRecordingToggle(container, plugin, save);
     renderChatSeparatorField(container, plugin, save);
+    renderChatSaveLocationField(container, plugin, save);
+    
+    // Add chat view button if callback provided
+    if (onOpenChat) {
+      renderOpenChatViewButton(container, onOpenChat);
+    }
   };
   reRender();
 }

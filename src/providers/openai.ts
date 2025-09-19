@@ -20,6 +20,93 @@ export class OpenAIProvider implements AIProvider {
         });
     }
 
+    async uploadImageFromDataURI?(dataUri: string, filename?: string): Promise<{ url?: string; id?: string } | null> {
+        try {
+            const match = dataUri.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+            if (!match) return null;
+            const mime = match[1];
+            const base64 = match[2];
+
+            // Convert to binary
+            const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+            const form = new FormData();
+            const blob = new Blob([binary], { type: mime });
+            form.append('file', blob, filename || `upload.${mime.split('/')[1]}`);
+            // Purpose is unspecified; use 'answers' as a lightweight option
+            form.append('purpose', 'answers');
+
+            const resp = await fetch('https://api.openai.com/v1/files', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.settings.api_key}`
+                },
+                body: form as any
+            });
+
+            if (!resp.ok) {
+                console.warn('OpenAI file upload failed', await resp.text());
+                return null;
+            }
+
+            const data = await resp.json();
+            return { id: data?.id || undefined, url: undefined };
+        } catch (error) {
+            console.warn('OpenAI uploadImageFromDataURI failed:', error);
+            return null;
+        }
+    }
+
+    async uploadImageFromUrl?(url: string, filename?: string): Promise<{ url?: string; id?: string } | null> {
+        try {
+            // For remote URLs, try server-side fetch to re-upload to OpenAI files endpoint by sending JSON instructing remote fetch
+            const resp = await fetch('https://api.openai.com/v1/files', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.settings.api_key}`
+                },
+                body: JSON.stringify({ url })
+            });
+
+            if (!resp.ok) {
+                console.warn('OpenAI file upload from URL failed', await resp.text());
+                return null;
+            }
+
+            const data = await resp.json();
+            return { id: data?.id || null, url: data?.url || null };
+        } catch (error) {
+            console.warn('OpenAI uploadImageFromUrl failed:', error);
+            return null;
+        }
+    }
+
+    async analyzeImage?(imageUrlOrId: string): Promise<{ text?: string; labels?: string[] } | null> {
+        try {
+            // Attempt a simple text response asking the model to describe the image by including the image URL in the prompt.
+            const prompt = `Describe the following image and list any notable objects or text:\n${imageUrlOrId}`;
+
+            const resp = await fetch('https://api.openai.com/v1/responses', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.settings.api_key}`
+                },
+                body: JSON.stringify({ model: this.settings.model, input: prompt })
+            });
+
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            // Attempt to extract text
+            const text = (data?.output?.map((o: any) => o.content).join(' ') ) || data?.output_text || null;
+            return { text, labels: undefined };
+        } catch (error) {
+            console.warn('OpenAI analyzeImage failed:', error);
+            return null;
+        }
+    }
+
     async getStreamingResponse(prompt: string, onUpdate: (text: string) => void, signal: AbortSignal): Promise<void> {
         // Convert single prompt to message array and delegate to conversation method
         const messages: AIMessage[] = [

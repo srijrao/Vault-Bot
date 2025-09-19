@@ -19,6 +19,11 @@ export interface AIProvider {
     getStreamingResponseWithConversation(messages: AIMessage[], onUpdate: (text: string) => void, signal: AbortSignal): Promise<void>;
     validateApiKey(): Promise<{ valid: boolean; error?: string }>;
     listModels(): Promise<ModelInfo[]>;
+    // Optional image upload/vision methods. Providers may implement these to support
+    // uploading data-URIs or remote images and performing basic vision/analysis.
+    uploadImageFromDataURI?: (dataUri: string, filename?: string) => Promise<{ url?: string; id?: string } | null>;
+    uploadImageFromUrl?: (url: string, filename?: string) => Promise<{ url?: string; id?: string } | null>;
+    analyzeImage?: (imageUrlOrId: string) => Promise<{ text?: string; labels?: string[] } | null>;
 }
 
 export interface AIProviderSettings {

@@ -1,6 +1,8 @@
 import { Plugin, MarkdownView } from 'obsidian';
 import { openAiBotConfigModal } from './src/prompt_modal';
 import { AiBotSidePanel, AI_BOT_PANEL_VIEW_TYPE, openAiBotSidePanel } from './src/side_panel';
+import { ChatView, CHAT_VIEW_TYPE, openChatView } from './src/chat/chat_view';
+import { loadChatFromNote } from './src/chat/note_loader';
 import { CommandHandler } from './src/command_handler';
 import { zipOldAiCalls } from './src/archiveCalls';
 import { VaultBotPluginSettings, DEFAULT_SETTINGS, VaultBotSettingTab } from './src/settings';
@@ -17,6 +19,12 @@ export default class VaultBotPlugin extends Plugin {
 		this.registerView(
 			AI_BOT_PANEL_VIEW_TYPE,
 			(leaf) => new AiBotSidePanel(leaf, this)
+		);
+
+		// Register the chat view
+		this.registerView(
+			CHAT_VIEW_TYPE,
+			(leaf) => new ChatView(leaf, this)
 		);
 
 		// On startup, sort prior-day AI call logs into date folders (skip today), then solid-compress those folders
@@ -60,6 +68,28 @@ export default class VaultBotPlugin extends Plugin {
 		  id: 'open-ai-bot-panel',
 		  name: 'Open AI Bot Panel',
 		  callback: () => openAiBotSidePanel(this)
+		});
+
+		// Add command to open AI Chat view
+		this.addCommand({
+		  id: 'open-ai-chat',
+		  name: 'Open AI Chat',
+		  callback: () => openChatView(this)
+		});
+
+		// Add command to load chat from note
+		this.addCommand({
+		  id: 'load-chat-from-note',
+		  name: 'Load Chat from Note',
+		  callback: async () => {
+			const conversation = await loadChatFromNote(this.app, this.settings);
+			if (conversation) {
+			  // Open chat view and load the conversation
+			  await openChatView(this);
+			  // We'll need to pass the conversation to the chat view
+			  // For now, just open the chat view - we can enhance this later
+			}
+		  }
 		});
 
 		// Add ribbon icon for quick access to side panel

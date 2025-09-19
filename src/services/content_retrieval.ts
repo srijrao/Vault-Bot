@@ -11,6 +11,7 @@ export interface RetrievedNote {
   path: string;
   title: string;
   content: string;
+  images?: RetrievedImageRef[];
 }
 
 export interface LinkInfo {
@@ -18,6 +19,14 @@ export interface LinkInfo {
   section?: string;
   block?: string;
   alias?: string;
+}
+
+export interface RetrievedImageRef {
+  sourceType: 'data' | 'url';
+  raw: string; // original markdown or data-uri
+  alt?: string;
+  filename?: string;
+  mime?: string;
 }
 
 export class ContentRetrievalService {
@@ -109,6 +118,24 @@ export class ContentRetrievalService {
       const linkInfo = this.parseMarkdownLink(linkPath, linkText);
       if (linkInfo) {
         links.push(linkInfo);
+      }
+    }
+
+    // Detect images in markdown: ![alt](url) and data URIs
+    // We'll not resolve external URLs here but will capture data URIs and relative files
+    // This is a simple pass; more complex parsing can be added later.
+    // Image markdown regex
+    const imageMarkdownRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    while ((match = imageMarkdownRegex.exec(text)) !== null) {
+      const alt = match[1];
+      const imgPath = match[2];
+      // If it's a data URI
+      if (/^data:image\//.test(imgPath)) {
+        // Add as a special link-like entry using path in LinkInfo alias
+        links.push({ path: imgPath, alias: alt });
+      } else if (!this.isExternalLink(imgPath)) {
+        // Treat relative image paths as links to files
+        links.push({ path: imgPath, alias: alt });
       }
     }
 
@@ -209,11 +236,33 @@ export class ContentRetrievalService {
         processedContent = await this.extractFromReadingView(processedContent, file);
       }
 
+      // Find images in the processed content
+      const images: RetrievedImageRef[] = [];
+      // data URIs
+      const dataUriRegex = /data:(image\/[a-zA-Z0-9.+-]+);base64,[A-Za-z0-9+/=]+/g;
+      let imgMatch;
+      while ((imgMatch = dataUriRegex.exec(processedContent)) !== null) {
+        images.push({ sourceType: 'data', raw: imgMatch[0], mime: imgMatch[1] });
+      }
+      // markdown images
+      const imageMarkdownRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+      while ((imgMatch = imageMarkdownRegex.exec(processedContent)) !== null) {
+        const alt = imgMatch[1];
+        const imgPath = imgMatch[2];
+        if (/^data:image\//.test(imgPath)) {
+          const m = imgPath.match(/data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+          images.push({ sourceType: 'data', raw: imgPath, alt, mime: m?.[1] });
+        } else {
+          images.push({ sourceType: 'url', raw: imgPath, alt });
+        }
+      }
+
       return {
         file,
         path: file.path,
         title: file.basename,
-        content: processedContent
+  content: processedContent,
+  images: images.length ? images : undefined
       };
     } catch (error) {
       console.warn(`Failed to read note: ${file.path}`, error);

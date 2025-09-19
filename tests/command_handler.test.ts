@@ -33,6 +33,26 @@ vi.mock('obsidian', () => ({
         onChooseItem() {}
         renderSuggestion() {}
     },
+    ItemView: class {
+        containerEl: any;
+        app: any;
+        leaf: any;
+        constructor(leaf: any) {
+            this.leaf = leaf;
+            this.containerEl = {
+                empty: vi.fn(),
+                createEl: vi.fn(),
+                addClass: vi.fn(),
+                removeClass: vi.fn(),
+                find: vi.fn(),
+                appendChild: vi.fn(),
+            };
+        }
+        getViewType() { return 'mock-view'; }
+        getDisplayText() { return 'Mock View'; }
+        async onOpen() {}
+        async onClose() {}
+    },
 }));
 
 // Mock AI Provider Wrapper

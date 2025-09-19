@@ -78,3 +78,33 @@ export interface Editor {
 }
 
 export interface MarkdownView {}
+
+export class ItemView {
+    containerEl: any;
+    app: App;
+    leaf: any;
+    
+    constructor(leaf: any) {
+        this.leaf = leaf;
+        this.containerEl = {
+            empty: () => {},
+            createEl: () => ({}),
+            addClass: () => {},
+            removeClass: () => {},
+            find: () => ({}),
+            appendChild: () => {},
+        };
+    }
+    
+    getViewType(): string {
+        return 'mock-view';
+    }
+    
+    getDisplayText(): string {
+        return 'Mock View';
+    }
+    
+    async onOpen(): Promise<void> {}
+    
+    async onClose(): Promise<void> {}
+}

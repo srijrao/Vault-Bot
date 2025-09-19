@@ -176,9 +176,37 @@ export class AIProviderWrapper {
             // Find the last user message index and enhance it
             for (let i = enhancedMessages.length - 1; i >= 0; i--) {
                 if (enhancedMessages[i].role === 'user') {
+                    let updatedContent = enhancedMessages[i].content + formattedContent;
+
+                    // If any images were returned in retrieved notes, attempt to upload them via provider
+                    try {
+                        const imageRefs = retrievedNotes.flatMap(n => (n as any).images || []);
+                        for (const img of imageRefs) {
+                            if (!img || !img.raw) continue;
+                            try {
+                                let uploadResult: { url?: string; id?: string } | null = null;
+                                if (img.sourceType === 'data' && this.provider.uploadImageFromDataURI) {
+                                    uploadResult = await this.provider.uploadImageFromDataURI(img.raw, img.filename || img.alt);
+                                } else if (img.sourceType === 'url' && this.provider.uploadImageFromUrl) {
+                                    uploadResult = await this.provider.uploadImageFromUrl(img.raw, img.filename || img.alt);
+                                }
+
+                                if (uploadResult && (uploadResult.url || uploadResult.id)) {
+                                    const replacement = uploadResult.url || uploadResult.id || img.raw;
+                                    // Replace occurrences of the raw string in the updated content with a provider URL placeholder
+                                    updatedContent = updatedContent.split(img.raw).join(replacement);
+                                }
+                            } catch (err) {
+                                console.warn('Image upload failed, leaving original reference.', err);
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('Failed to process image uploads for retrieved notes:', err);
+                    }
+
                     enhancedMessages[i] = {
                         ...enhancedMessages[i],
-                        content: enhancedMessages[i].content + formattedContent
+                        content: updatedContent
                     };
                     break;
                 }
