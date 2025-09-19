@@ -161,6 +161,25 @@ export function renderChatSaveLocationField(
     });
 }
 
+// Renders the Chat Auto-Save Notes toggle.
+export function renderChatAutoSaveToggle(
+  container: HTMLElement,
+  plugin: PluginLike,
+  save: (immediate?: boolean) => Promise<void> | void
+) {
+  new Setting(container)
+    .setName('Auto-save chat notes')
+    .setDesc('Automatically save chat conversations to notes when starting a new chat.')
+    .addToggle((toggle) => {
+      toggle
+        .setValue(plugin.settings.chatAutoSaveNotes || false)
+        .onChange(async (value) => {
+          plugin.settings.chatAutoSaveNotes = value;
+          await save();
+        });
+    });
+}
+
 // Renders the Open Chat View button.
 export function renderOpenChatViewButton(
   container: HTMLElement,
@@ -194,6 +213,7 @@ export function renderCoreConfigSection(
     renderRecordingToggle(container, plugin, save);
     renderChatSeparatorField(container, plugin, save);
     renderChatSaveLocationField(container, plugin, save);
+    renderChatAutoSaveToggle(container, plugin, save);
     
     // Add chat view button if callback provided
     if (onOpenChat) {

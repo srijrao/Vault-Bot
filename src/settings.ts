@@ -27,6 +27,7 @@ export interface VaultBotPluginSettings {
 	noteExclusionsLevel1?: string[];
 	noteExclusionsDeepLink?: string[];
 	chatDefaultSaveLocation?: string;
+	chatAutoSaveNotes?: boolean;
 	uiState?: {
 		collapsedSections?: Record<string, boolean>;
 	};
@@ -46,6 +47,7 @@ export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
 	noteExclusionsLevel1: [],
 	noteExclusionsDeepLink: [],
 	chatDefaultSaveLocation: "",
+	chatAutoSaveNotes: false,
 	aiProviderSettings: {
 		openai: {
 			api_key: '',

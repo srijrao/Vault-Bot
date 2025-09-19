@@ -3,31 +3,32 @@
  */
 
 import { ChatMessage } from './chat_types';
+import { MarkdownRenderer, Component } from 'obsidian';
+
+export interface ChatMessageCallbacks {
+  onEdit: (messageId: string, newContent: string) => void;
+  onDelete: (messageId: string) => void;
+  onCopy: (content: string) => void;
+  onRegenerate: (messageId: string) => void;
+}
 
 export class ChatMessageComponent {
   private message: ChatMessage;
   private element: HTMLElement;
-  private onEdit: (messageId: string, newContent: string) => void;
-  private onDelete: (messageId: string) => void;
-  private onCopy: (content: string) => void;
-  private onRegenerate: (messageId: string) => void;
+  private callbacks: ChatMessageCallbacks;
   private isEditing: boolean = false;
   private editTextarea: HTMLTextAreaElement | null = null;
+  private renderingMode: 'reading' | 'source' = 'reading';
+  private component: Component | null = null;
 
   constructor(
     message: ChatMessage,
-    callbacks: {
-      onEdit: (messageId: string, newContent: string) => void;
-      onDelete: (messageId: string) => void;
-      onCopy: (content: string) => void;
-      onRegenerate: (messageId: string) => void;
-    }
+    callbacks: ChatMessageCallbacks,
+    renderingMode: 'reading' | 'source' = 'reading'
   ) {
     this.message = message;
-    this.onEdit = callbacks.onEdit;
-    this.onDelete = callbacks.onDelete;
-    this.onCopy = callbacks.onCopy;
-    this.onRegenerate = callbacks.onRegenerate;
+    this.callbacks = callbacks;
+    this.renderingMode = renderingMode;
     this.element = this.createElement();
   }
 
@@ -44,6 +45,14 @@ export class ChatMessageComponent {
   updateMessage(message: ChatMessage): void {
     console.log('ChatMessageComponent: updateMessage called, old content length:', this.message.content.length, 'new content length:', message.content.length);
     this.message = message;
+    this.render();
+  }
+
+  /**
+   * Set rendering mode and re-render
+   */
+  setRenderingMode(mode: 'reading' | 'source'): void {
+    this.renderingMode = mode;
     this.render();
   }
 
@@ -127,9 +136,41 @@ export class ChatMessageComponent {
    */
   private renderViewMode(contentEl: HTMLElement): void {
     const textEl = document.createElement('div');
-    textEl.className = 'chat-message-text';
-    textEl.textContent = this.message.content;
+    textEl.className = `chat-message-text ${this.renderingMode}-mode`;
+    
+    if (this.renderingMode === 'source') {
+      // Source mode: show raw text
+      textEl.textContent = this.message.content;
+    } else {
+      // Reading mode: render markdown
+      this.renderMarkdown(textEl, this.message.content);
+    }
+    
     contentEl.appendChild(textEl);
+  }
+
+  /**
+   * Render markdown content
+   */
+  private async renderMarkdown(container: HTMLElement, content: string): Promise<void> {
+    try {
+      // Create a component for markdown rendering
+      if (!this.component) {
+        this.component = new Component();
+      }
+      
+      // Use Obsidian's built-in markdown renderer
+      await MarkdownRenderer.renderMarkdown(
+        content,
+        container,
+        '',
+        this.component
+      );
+    } catch (error) {
+      console.error('Error rendering markdown:', error);
+      // Fallback to plain text
+      container.textContent = content;
+    }
   }
 
   /**
@@ -213,7 +254,25 @@ export class ChatMessageComponent {
     deleteBtn.className += ' chat-message-action-delete';
     actionsEl.appendChild(deleteBtn);
     
+    // Position buttons smartly based on message height
+    setTimeout(() => this.positionActions(actionsEl), 0);
+    
     return actionsEl;
+  }
+
+  /**
+   * Position action buttons based on message height
+   */
+  private positionActions(actionsEl: HTMLElement): void {
+    const messageHeight = this.element.offsetHeight;
+    const viewportHeight = window.innerHeight;
+    const messageRect = this.element.getBoundingClientRect();
+    const messageBottom = messageRect.bottom;
+    
+    // If message is tall or extends beyond viewport, position buttons at bottom
+    if (messageHeight > 200 || messageBottom > viewportHeight * 0.8) {
+      actionsEl.classList.add('bottom-positioned');
+    }
   }
 
   /**
@@ -253,7 +312,7 @@ export class ChatMessageComponent {
     if (this.editTextarea) {
       const newContent = this.editTextarea.value.trim();
       if (newContent !== this.message.content) {
-        this.onEdit(this.message.id, newContent);
+        this.callbacks.onEdit(this.message.id, newContent);
       }
     }
     this.cancelEdit();
@@ -274,7 +333,7 @@ export class ChatMessageComponent {
   private async copyMessage(): Promise<void> {
     try {
       await navigator.clipboard.writeText(this.message.content);
-      this.onCopy(this.message.content);
+      this.callbacks.onCopy(this.message.content);
     } catch (error) {
       console.error('Failed to copy to clipboard:', error);
       // Fallback: show content in a modal or notice
@@ -285,14 +344,14 @@ export class ChatMessageComponent {
    * Trigger message regeneration
    */
   private regenerateMessage(): void {
-    this.onRegenerate(this.message.id);
+    this.callbacks.onRegenerate(this.message.id);
   }
 
   /**
    * Delete this message
    */
   private deleteMessage(): void {
-    this.onDelete(this.message.id);
+    this.callbacks.onDelete(this.message.id);
   }
 
   /**
@@ -328,9 +387,13 @@ export class ChatMessageComponent {
   }
 
   /**
-   * Clean up resources
+   * Destroy component and clean up
    */
   destroy(): void {
+    if (this.component) {
+      this.component.unload();
+      this.component = null;
+    }
     this.element.remove();
   }
 }

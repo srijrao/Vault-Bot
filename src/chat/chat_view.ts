@@ -17,6 +17,8 @@ import { NoteSaver } from './note_saver';
 import { NoteLoader, loadChatFromNote } from './note_loader';
 import { ChatMessageComponent } from './chat_message';
 import { AIProviderWrapper, AIMessage } from '../aiprovider';
+import { generateTitle } from '../utils/title_generator';
+import { recordChatCall, type ChatMessage as RecorderChatMessage, type ChatRequestRecord, type ChatResponseRecord, resolveAiCallsDir } from '../recorder';
 
 export const CHAT_VIEW_TYPE = 'vault-bot-chat';
 
@@ -27,6 +29,13 @@ export class ChatView extends ItemView {
   private noteSaver: NoteSaver;
   private noteLoader: NoteLoader;
   private messageComponents: Map<string, ChatMessageComponent> = new Map();
+  private renderingMode: 'reading' | 'source' = 'reading';
+  private lastAutoSaveIndicator: HTMLElement | null = null;
+  private pendingRecording: {
+    requestRecord: ChatRequestRecord;
+    responseRecord: ChatResponseRecord;
+    requestStart: Date;
+  } | null = null;
   
   // UI Elements
   private headerEl: HTMLElement;
@@ -35,6 +44,8 @@ export class ChatView extends ItemView {
   private inputTextarea: HTMLTextAreaElement;
   private sendButton: HTMLButtonElement;
   private stopButton: HTMLButtonElement;
+  private readingModeBtn: HTMLButtonElement;
+  private sourceModeBtn: HTMLButtonElement;
 
   constructor(leaf: WorkspaceLeaf, plugin: VaultBotPlugin) {
     super(leaf);
@@ -99,12 +110,38 @@ export class ChatView extends ItemView {
    * Create header controls
    */
   private createHeaderControls(): void {
+    // Model info (faded text at top)
+    const modelInfoEl = this.headerEl.createDiv('chat-view-model-info');
+    this.updateModelInfo(modelInfoEl);
+
+    // Header row with title and main controls
+    const headerRowEl = this.headerEl.createDiv('chat-view-header-row');
+    
     // Title
-    const titleEl = this.headerEl.createDiv('chat-view-title');
+    const titleEl = headerRowEl.createDiv('chat-view-title');
     titleEl.textContent = this.state.currentConversation?.title || 'New Chat';
 
     // Controls container
-    const controlsEl = this.headerEl.createDiv('chat-view-controls');
+    const controlsEl = headerRowEl.createDiv('chat-view-controls');
+
+    // Rendering mode toggle group
+    const toggleGroupEl = controlsEl.createDiv('chat-view-toggle-group');
+    
+    const readingBtn = toggleGroupEl.createEl('button', {
+      text: 'Reading',
+      cls: 'chat-view-toggle-button active'
+    });
+    readingBtn.onclick = () => this.setRenderingMode('reading');
+
+    const sourceBtn = toggleGroupEl.createEl('button', {
+      text: 'Source',
+      cls: 'chat-view-toggle-button'
+    });
+    sourceBtn.onclick = () => this.setRenderingMode('source');
+
+    // Store references to toggle buttons
+    this.readingModeBtn = readingBtn;
+    this.sourceModeBtn = sourceBtn;
 
     // New chat button
     const newChatBtn = controlsEl.createEl('button', {
@@ -140,8 +177,26 @@ export class ChatView extends ItemView {
    * Create input controls
    */
   private createInputControls(): void {
+    // Button area above input
+    const buttonAreaEl = this.inputContainer.createDiv('chat-input-button-area');
+    
+    // Settings button
+    const settingsBtn = buttonAreaEl.createEl('button', {
+      text: 'Model Settings',
+      cls: 'chat-input-button'
+    });
+    settingsBtn.onclick = () => this.openModelSettings();
+
+    // Auto-save indicator
+    const autoSaveIndicator = buttonAreaEl.createDiv('chat-auto-save-indicator');
+    autoSaveIndicator.innerHTML = '<span class="save-icon">💾</span>Auto-saved';
+    this.lastAutoSaveIndicator = autoSaveIndicator;
+
+    // Main input area
+    const inputMainEl = this.inputContainer.createDiv('chat-input-main');
+
     // Input textarea
-    this.inputTextarea = this.inputContainer.createEl('textarea', {
+    this.inputTextarea = inputMainEl.createEl('textarea', {
       cls: 'chat-input-textarea',
       attr: { placeholder: 'Type your message...' }
     });
@@ -153,7 +208,7 @@ export class ChatView extends ItemView {
     this.inputTextarea.addEventListener('keydown', this.handleInputKeydown.bind(this));
 
     // Send button
-    this.sendButton = this.inputContainer.createEl('button', {
+    this.sendButton = inputMainEl.createEl('button', {
       text: 'Send',
       cls: 'chat-send-button'
     });
@@ -164,16 +219,90 @@ export class ChatView extends ItemView {
    * Initialize with a new conversation or load existing
    */
   private async initializeConversation(): Promise<void> {
-    // For now, always start with a new conversation
-    // Later we could add conversation list and persistence
-    this.startNewChat();
+    // Try to load the last active conversation
+    const lastConversation = await this.loadLastActiveConversation();
+    
+    if (lastConversation) {
+      this.state.currentConversation = lastConversation;
+      this.renderAllMessages();
+      this.updateTitle();
+    } else {
+      // Start with a new conversation if none exists
+      this.startNewChat();
+    }
+  }
+
+  /**
+   * Load the last active conversation
+   */
+  private async loadLastActiveConversation(): Promise<ChatConversation | null> {
+    try {
+      const adapter = this.app.vault.adapter;
+      const activeConversationPath = `${this.plugin.manifest.dir}/active_conversation.json`;
+      
+      if (await adapter.exists(activeConversationPath)) {
+        const data = await adapter.read(activeConversationPath);
+        const conversationData = JSON.parse(data);
+        
+        // Convert timestamp strings back to Date objects
+        conversationData.messages = conversationData.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        conversationData.createdAt = new Date(conversationData.createdAt);
+        conversationData.updatedAt = new Date(conversationData.updatedAt);
+        
+        return conversationData as ChatConversation;
+      }
+    } catch (error) {
+      console.error('Error loading last active conversation:', error);
+    }
+    
+    return null;
+  }
+
+  /**
+   * Save current conversation as active
+   */
+  private async saveActiveConversation(): Promise<void> {
+    if (!this.state.currentConversation) return;
+    
+    try {
+      const adapter = this.app.vault.adapter;
+      const activeConversationPath = `${this.plugin.manifest.dir}/active_conversation.json`;
+      
+      // Prepare data for saving (convert dates to strings)
+      const dataToSave = {
+        ...this.state.currentConversation,
+        messages: this.state.currentConversation.messages.map(msg => ({
+          ...msg,
+          timestamp: msg.timestamp.toISOString(),
+          // Remove runtime-only properties
+          isStreaming: undefined,
+          isEditing: undefined
+        })),
+        createdAt: this.state.currentConversation.createdAt.toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      await adapter.write(activeConversationPath, JSON.stringify(dataToSave, null, 2));
+    } catch (error) {
+      console.error('Error saving active conversation:', error);
+    }
   }
 
   /**
    * Start a new chat conversation
    */
-  private startNewChat(): void {
-    // Save current conversation if it exists
+  private async startNewChat(): Promise<void> {
+    // Auto-save current conversation if enabled and conversation has content
+    if (this.state.currentConversation && 
+        this.state.currentConversation.messages.length > 0 && 
+        this.plugin.settings.chatAutoSaveNotes) {
+      await this.autoSaveCurrentConversation();
+    }
+
+    // Save current conversation to storage if it exists
     if (this.state.currentConversation && this.state.currentConversation.messages.length > 0) {
       this.storage.autoSaveConversation(this.state.currentConversation);
     }
@@ -182,6 +311,48 @@ export class ChatView extends ItemView {
     this.state.currentConversation = createConversation();
     this.clearMessages();
     this.updateTitle();
+    
+    // Save the new empty conversation as active
+    this.saveActiveConversation();
+  }
+
+  /**
+   * Auto-save current conversation to a note
+   */
+  private async autoSaveCurrentConversation(): Promise<void> {
+    if (!this.state.currentConversation || this.state.currentConversation.messages.length === 0) {
+      return;
+    }
+
+    try {
+      const savedFile = await this.noteSaver.saveConversationToNote(this.state.currentConversation);
+      
+      if (savedFile && this.lastAutoSaveIndicator) {
+        // Show auto-save indicator with clickable link
+        this.lastAutoSaveIndicator.innerHTML = `
+          <span class="save-icon">💾</span>
+          Auto-saved: <span class="chat-saved-note-link">${savedFile.basename}</span>
+        `;
+        this.lastAutoSaveIndicator.classList.add('visible');
+        
+        // Add click handler to open the saved note
+        const link = this.lastAutoSaveIndicator.querySelector('.chat-saved-note-link');
+        if (link) {
+          link.addEventListener('click', () => {
+            this.app.workspace.openLinkText(savedFile.path, '', false);
+          });
+        }
+        
+        // Hide indicator after 5 seconds
+        setTimeout(() => {
+          if (this.lastAutoSaveIndicator) {
+            this.lastAutoSaveIndicator.classList.remove('visible');
+          }
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('Error auto-saving conversation:', error);
+    }
   }
 
   /**
@@ -232,8 +403,10 @@ export class ChatView extends ItemView {
     console.log('ChatView: created user message:', userMessage);
     this.addMessage(userMessage);
 
-    // Update title if this is the first message
-    if (this.state.currentConversation!.messages.length === 1) {
+    // Generate title after 2 messages (user message + first AI response)
+    const messageCount = this.state.currentConversation!.messages.length;
+    if (messageCount === 1) {
+      // Use simple title for first message
       this.state.currentConversation!.title = generateConversationTitle(content);
       this.updateTitle();
     }
@@ -241,6 +414,11 @@ export class ChatView extends ItemView {
     // Get AI response
     console.log('ChatView: getting AI response');
     await this.getAIResponse();
+    
+    // Generate AI title after 2 messages
+    if (messageCount === 1 && this.state.currentConversation!.messages.length >= 2) {
+      this.generateAndSetTitle();
+    }
   }
 
   /**
@@ -285,7 +463,7 @@ export class ChatView extends ItemView {
         this.updateMessage(assistantMessage);
       };
 
-      const onComplete = () => {
+      const onComplete = async () => {
         console.log('ChatView: AI response complete, final content:', accumulatedContent);
         assistantMessage.content = accumulatedContent;
         assistantMessage.isStreaming = false;
@@ -293,6 +471,28 @@ export class ChatView extends ItemView {
         this.state.isStreaming = false;
         this.state.abortController = null;
         this.updateStreamingUI();
+        
+        // Complete recording if enabled
+        if (this.pendingRecording && this.plugin.settings.recordApiCalls) {
+          try {
+            this.pendingRecording.responseRecord.content = accumulatedContent;
+            this.pendingRecording.responseRecord.timestamp = new Date().toISOString();
+            this.pendingRecording.responseRecord.duration_ms = Date.now() - this.pendingRecording.requestStart.getTime();
+
+            const dir = resolveAiCallsDir(this.app);
+            await recordChatCall({
+              dir,
+              provider: this.pendingRecording.requestRecord.provider,
+              model: this.pendingRecording.requestRecord.model,
+              request: this.pendingRecording.requestRecord,
+              response: this.pendingRecording.responseRecord
+            });
+            
+            this.pendingRecording = null;
+          } catch (error) {
+            console.error('Error completing chat call recording:', error);
+          }
+        }
         
         // Auto-save conversation
         if (this.state.currentConversation) {
@@ -304,10 +504,13 @@ export class ChatView extends ItemView {
       await provider.getStreamingResponseWithConversation(
         aiMessages,
         onUpdate,
-        this.state.abortController.signal
+        this.state.abortController.signal,
+        this.createRecordingCallback(), // Recording callback
+        undefined, // currentFile
+        true // isConversationMode
       );
       
-      onComplete();
+      await onComplete();
     } catch (error: any) {
       console.error('ChatView: AI response error:', error);
       if (error.name !== 'AbortError') {
@@ -358,6 +561,122 @@ export class ChatView extends ItemView {
   }
 
   /**
+   * Update model info display
+   */
+  private updateModelInfo(modelInfoEl: HTMLElement): void {
+    const provider = this.plugin.settings.apiProvider;
+    const settings = this.plugin.settings.aiProviderSettings[provider];
+    const model = settings && 'model' in settings ? (settings as any).model : 'Unknown';
+    
+    modelInfoEl.textContent = `${provider.toUpperCase()} - ${model}`;
+  }
+
+  /**
+   * Set rendering mode and update all messages
+   */
+  private setRenderingMode(mode: 'reading' | 'source'): void {
+    this.renderingMode = mode;
+    
+    // Update button states
+    this.readingModeBtn.classList.toggle('active', mode === 'reading');
+    this.sourceModeBtn.classList.toggle('active', mode === 'source');
+    
+    // Update all existing message components
+    for (const component of this.messageComponents.values()) {
+      component.setRenderingMode(mode);
+    }
+  }
+
+  /**
+   * Open model settings
+   */
+  private openModelSettings(): void {
+    // Open the plugin settings tab
+    // @ts-ignore - app.setting is available in Obsidian
+    this.app.setting.open();
+    
+    // Try to navigate to the plugin's tab
+    // @ts-ignore
+    const settingTab = this.app.setting.openTabById(this.plugin.manifest.id);
+    if (settingTab) {
+      // Focus on model settings section if possible
+      setTimeout(() => {
+        const modelSection = document.querySelector('[data-setting-key="model-settings"]');
+        if (modelSection) {
+          modelSection.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
+  }
+
+  /**
+   * Generate and set conversation title using AI
+   */
+  private async generateAndSetTitle(): Promise<void> {
+    if (!this.state.currentConversation || this.state.currentConversation.messages.length < 2) {
+      return;
+    }
+
+    try {
+      // Use the first user message and AI response to generate a title
+      const conversationText = this.state.currentConversation.messages
+        .slice(0, 2)
+        .map(msg => `${msg.role}: ${msg.content}`)
+        .join('\n');
+
+      const generatedTitle = await generateTitle(conversationText, this.plugin.settings);
+      
+      if (generatedTitle && generatedTitle !== 'Chat Conversation') {
+        this.state.currentConversation.title = generatedTitle;
+        this.updateTitle();
+        this.saveActiveConversation();
+      }
+    } catch (error) {
+      console.error('Error generating conversation title:', error);
+    }
+  }
+
+  /**
+   * Create recording callback for AI calls
+   */
+  private createRecordingCallback() {
+    return async (messages: RecorderChatMessage[], model: string, options: Record<string, any>) => {
+      if (this.plugin.settings.recordApiCalls) {
+        try {
+          const requestStart = new Date();
+          
+          const requestRecord: ChatRequestRecord = {
+            messages: messages,
+            provider: this.plugin.settings.apiProvider,
+            model: model,
+            timestamp: requestStart.toISOString(),
+            options: options
+          };
+
+          // Create a response record - we'll update this after streaming completes
+          const responseRecord: ChatResponseRecord = {
+            content: '', // Will be filled by streaming
+            provider: this.plugin.settings.apiProvider,
+            model: model,
+            timestamp: new Date().toISOString(),
+            duration_ms: 0 // Will be calculated
+          };
+
+          // Store for later completion
+          this.pendingRecording = {
+            requestRecord,
+            responseRecord,
+            requestStart
+          };
+
+        } catch (error) {
+          console.error('Error preparing chat call recording:', error);
+        }
+      }
+    };
+  }
+
+  /**
    * Add message to conversation and UI
    */
   private addMessage(message: ChatMessage): void {
@@ -375,6 +694,9 @@ export class ChatView extends ItemView {
     console.log('ChatView: message rendered');
     
     this.scrollToBottom();
+    
+    // Save conversation state
+    this.saveActiveConversation();
   }
 
   /**
@@ -402,7 +724,7 @@ export class ChatView extends ItemView {
       onDelete: this.handleMessageDelete.bind(this),
       onCopy: this.handleMessageCopy.bind(this),
       onRegenerate: this.handleMessageRegenerate.bind(this)
-    });
+    }, this.renderingMode);
     
     console.log('ChatView: message component created');
     
