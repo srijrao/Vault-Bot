@@ -1,6 +1,7 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { streamText } from 'ai';
 import { AIProvider, AIProviderSettings, AIMessage, ModelInfo } from './base';
+import { debugConsole } from '../utils/debug';
 
 export interface OpenRouterProviderSettings extends AIProviderSettings {
     api_key: string;
@@ -48,7 +49,7 @@ export class OpenRouterProvider implements AIProvider {
             // Expecting { url, id } or similar
             return { url: data?.url || data?.file || null, id: data?.id || null };
         } catch (error) {
-            console.warn('OpenRouter image upload failed:', error);
+            debugConsole.warn('OpenRouter image upload failed:', error);
             return null;
         }
     }
@@ -71,7 +72,7 @@ export class OpenRouterProvider implements AIProvider {
             const data = await resp.json();
             return { url: data?.url || data?.file || null, id: data?.id || null };
         } catch (error) {
-            console.warn('OpenRouter image upload from URL failed:', error);
+            debugConsole.warn('OpenRouter image upload from URL failed:', error);
             return null;
         }
     }
@@ -94,7 +95,7 @@ export class OpenRouterProvider implements AIProvider {
             const data = await resp.json();
             return { text: data?.text || null, labels: data?.labels || null };
         } catch (error) {
-            console.warn('OpenRouter image analyze failed:', error);
+            debugConsole.warn('OpenRouter image analyze failed:', error);
             return null;
         }
     }
@@ -159,7 +160,7 @@ export class OpenRouterProvider implements AIProvider {
                 
                 // If no data was received, this might indicate a streaming issue
                 if (!hasReceivedData) {
-                    console.warn('OpenRouter streaming completed but no data was received. This may indicate a model-specific issue.');
+                    debugConsole.warn('OpenRouter streaming completed but no data was received. This may indicate a model-specific issue.');
                 }
                 
                 return;
@@ -171,7 +172,7 @@ export class OpenRouterProvider implements AIProvider {
                                          this.settings.temperature !== 1.0;
                 
                 if (isTemperatureError) {
-                    console.warn(`Model ${this.settings.model} rejected temperature=${this.settings.temperature}, retrying with temperature=1`);
+                    debugConsole.warn(`Model ${this.settings.model} rejected temperature=${this.settings.temperature}, retrying with temperature=1`);
                     
                     // Retry with temperature = 1
                     const { textStream } = await streamText({
@@ -196,7 +197,7 @@ export class OpenRouterProvider implements AIProvider {
         } catch (error: any) {
             // Check if it's an abort error
             if (error.name === 'AbortError') {
-                console.log('OpenRouter request was aborted.');
+                debugConsole.log('OpenRouter request was aborted.');
                 return; // Gracefully handle abort
             }
             

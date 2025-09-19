@@ -1,5 +1,6 @@
 import { AIProvider, AIProviderSettings, AIMessage, ModelInfo } from "./base";
 import OpenAI from "openai";
+import { debugConsole } from '../utils/debug';
 
 export interface OpenAIProviderSettings extends AIProviderSettings {
     api_key: string;
@@ -45,14 +46,14 @@ export class OpenAIProvider implements AIProvider {
             });
 
             if (!resp.ok) {
-                console.warn('OpenAI file upload failed', await resp.text());
+                debugConsole.warn('OpenAI file upload failed', await resp.text());
                 return null;
             }
 
             const data = await resp.json();
             return { id: data?.id || undefined, url: undefined };
         } catch (error) {
-            console.warn('OpenAI uploadImageFromDataURI failed:', error);
+            debugConsole.warn('OpenAI uploadImageFromDataURI failed:', error);
             return null;
         }
     }
@@ -70,14 +71,14 @@ export class OpenAIProvider implements AIProvider {
             });
 
             if (!resp.ok) {
-                console.warn('OpenAI file upload from URL failed', await resp.text());
+                debugConsole.warn('OpenAI file upload from URL failed', await resp.text());
                 return null;
             }
 
             const data = await resp.json();
             return { id: data?.id || null, url: data?.url || null };
         } catch (error) {
-            console.warn('OpenAI uploadImageFromUrl failed:', error);
+            debugConsole.warn('OpenAI uploadImageFromUrl failed:', error);
             return null;
         }
     }
@@ -102,7 +103,7 @@ export class OpenAIProvider implements AIProvider {
             const text = (data?.output?.map((o: any) => o.content).join(' ') ) || data?.output_text || null;
             return { text, labels: undefined };
         } catch (error) {
-            console.warn('OpenAI analyzeImage failed:', error);
+            debugConsole.warn('OpenAI analyzeImage failed:', error);
             return null;
         }
     }
@@ -147,7 +148,7 @@ export class OpenAIProvider implements AIProvider {
                                          this.settings.temperature !== 1.0;
                 
                 if (isTemperatureError) {
-                    console.warn(`Model ${this.settings.model} rejected temperature=${this.settings.temperature}, retrying with temperature=1`);
+                    debugConsole.warn(`Model ${this.settings.model} rejected temperature=${this.settings.temperature}, retrying with temperature=1`);
                     
                     // Retry with temperature = 1
                     const stream = await this.openai.chat.completions.create({
@@ -169,7 +170,7 @@ export class OpenAIProvider implements AIProvider {
 
         } catch (error: any) {
             if (error.name === 'AbortError') {
-                console.log('OpenAI request was aborted.');
+                debugConsole.log('OpenAI request was aborted.');
             } else {
                 console.error('Error in OpenAI API request:', error);
                 throw new Error('Failed to get response from OpenAI.');

@@ -1,5 +1,6 @@
 import { App, TFile, Notice, Vault, MetadataCache, MarkdownRenderer, Component, Setting } from 'obsidian';
 import { VaultBotPluginSettings } from '../settings';
+import { debugConsole } from '../utils/debug';
 
 // Plugin-like interface for settings UI
 interface PluginLike {
@@ -210,7 +211,7 @@ export class ContentRetrievalService {
       const file = this.metadataCache.getFirstLinkpathDest(linkInfo.path, sourcePath || '');
       return file;
     } catch (error) {
-      console.warn(`Failed to resolve link: ${linkInfo.path}`, error);
+      debugConsole.warn(`Failed to resolve link: ${linkInfo.path}`, error);
       return null;
     }
   }
@@ -265,7 +266,7 @@ export class ContentRetrievalService {
   images: images.length ? images : undefined
       };
     } catch (error) {
-      console.warn(`Failed to read note: ${file.path}`, error);
+      debugConsole.warn(`Failed to read note: ${file.path}`, error);
       new Notice(`Failed to read note: ${file.path}`);
       return null;
     }
@@ -354,7 +355,7 @@ export class ContentRetrievalService {
       
       return textContent;
     } catch (error) {
-      console.warn(`HTML rendering failed for ${file.path}, using markdown:`, error);
+      debugConsole.warn(`HTML rendering failed for ${file.path}, using markdown:`, error);
       new Notice(`HTML rendering failed for ${file.path}, using markdown`);
       return content;
     }

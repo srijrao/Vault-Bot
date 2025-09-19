@@ -19,6 +19,7 @@ import { ChatMessageComponent } from './chat_message';
 import { AIProviderWrapper, AIMessage } from '../aiprovider';
 import { generateTitle } from '../utils/title_generator';
 import { recordChatCall, type ChatMessage as RecorderChatMessage, type ChatRequestRecord, type ChatResponseRecord, resolveAiCallsDir } from '../recorder';
+import { debugConsole } from '../utils/debug';
 
 export const CHAT_VIEW_TYPE = 'vault-bot-chat';
 
@@ -382,7 +383,7 @@ export class ChatView extends ItemView {
    * Send a message
    */
   private async sendMessage(): Promise<void> {
-    console.log('ChatView: sendMessage called');
+    debugConsole.log('ChatView: sendMessage called');
     
     if (this.state.isStreaming) {
       new Notice('Please wait for the current response to complete');
@@ -390,20 +391,20 @@ export class ChatView extends ItemView {
     }
 
     const content = this.inputTextarea.value.trim();
-    console.log('ChatView: message content:', content);
+    debugConsole.log('ChatView: message content:', content);
     
     if (!content) {
-      console.log('ChatView: empty content, returning');
+      debugConsole.log('ChatView: empty content, returning');
       return;
     }
 
     // Check if conversation exists
     if (!this.state.currentConversation) {
-      console.log('ChatView: no conversation, creating new one');
+      debugConsole.log('ChatView: no conversation, creating new one');
       this.startNewChat();
     }
 
-    console.log('ChatView: current conversation:', this.state.currentConversation);
+    debugConsole.log('ChatView: current conversation:', this.state.currentConversation);
 
     // Clear input
     this.inputTextarea.value = '';
@@ -411,7 +412,7 @@ export class ChatView extends ItemView {
 
     // Add user message
     const userMessage = createChatMessage('user', content);
-    console.log('ChatView: created user message:', userMessage);
+    debugConsole.log('ChatView: created user message:', userMessage);
     this.addMessage(userMessage);
 
     // Generate title after 2 messages (user message + first AI response)
@@ -423,7 +424,7 @@ export class ChatView extends ItemView {
     }
 
     // Get AI response
-    console.log('ChatView: getting AI response');
+    debugConsole.log('ChatView: getting AI response');
     await this.getAIResponse();
     
     // Generate AI title after 2 messages
@@ -436,10 +437,10 @@ export class ChatView extends ItemView {
    * Get AI response with streaming
    */
   private async getAIResponse(): Promise<void> {
-    console.log('ChatView: getAIResponse called');
+    debugConsole.log('ChatView: getAIResponse called');
     
     if (!this.state.currentConversation) {
-      console.log('ChatView: no conversation for AI response');
+      debugConsole.log('ChatView: no conversation for AI response');
       return;
     }
 
@@ -448,17 +449,17 @@ export class ChatView extends ItemView {
     this.updateStreamingUI();
 
     try {
-      console.log('ChatView: creating AI provider');
+      debugConsole.log('ChatView: creating AI provider');
       const provider = new AIProviderWrapper(this.plugin.settings, this.app);
       
       // Create assistant message for streaming
       const assistantMessage = createChatMessage('assistant', '', { isStreaming: true });
-      console.log('ChatView: created assistant message:', assistantMessage);
+      debugConsole.log('ChatView: created assistant message:', assistantMessage);
       this.addMessage(assistantMessage);
       
       // Convert chat messages to AI messages
       const aiMessages = this.convertToAIMessages();
-      console.log('ChatView: converted messages for AI:', aiMessages);
+      debugConsole.log('ChatView: converted messages for AI:', aiMessages);
       
       // Track accumulated content for streaming
       let accumulatedContent = '';
@@ -467,7 +468,7 @@ export class ChatView extends ItemView {
       const onUpdate = (text: string) => {
         // Accumulate the text content
         accumulatedContent += text;
-        console.log('ChatView: AI response update, total length:', accumulatedContent.length);
+        debugConsole.log('ChatView: AI response update, total length:', accumulatedContent.length);
         
         // Update the message with accumulated content
         assistantMessage.content = accumulatedContent;
@@ -475,7 +476,7 @@ export class ChatView extends ItemView {
       };
 
       const onComplete = async () => {
-        console.log('ChatView: AI response complete, final content:', accumulatedContent);
+        debugConsole.log('ChatView: AI response complete, final content:', accumulatedContent);
         assistantMessage.content = accumulatedContent;
         assistantMessage.isStreaming = false;
         this.updateMessage(assistantMessage);
@@ -511,7 +512,7 @@ export class ChatView extends ItemView {
         }
       };
 
-      console.log('ChatView: starting streaming response');
+      debugConsole.log('ChatView: starting streaming response');
       await provider.getStreamingResponseWithConversation(
         aiMessages,
         onUpdate,
@@ -697,18 +698,18 @@ export class ChatView extends ItemView {
    * Add message to conversation and UI
    */
   private addMessage(message: ChatMessage): void {
-    console.log('ChatView: addMessage called with:', message);
+    debugConsole.log('ChatView: addMessage called with:', message);
     
     if (!this.state.currentConversation) {
-      console.log('ChatView: no current conversation');
+      debugConsole.log('ChatView: no current conversation');
       return;
     }
     
     this.state.currentConversation.messages.push(message);
-    console.log('ChatView: message added to conversation, total messages:', this.state.currentConversation.messages.length);
+    debugConsole.log('ChatView: message added to conversation, total messages:', this.state.currentConversation.messages.length);
     
     this.renderMessage(message);
-    console.log('ChatView: message rendered');
+    debugConsole.log('ChatView: message rendered');
     
     this.scrollToBottom();
     
@@ -720,13 +721,13 @@ export class ChatView extends ItemView {
    * Update existing message
    */
   private updateMessage(message: ChatMessage): void {
-    console.log('ChatView: updateMessage called for message:', message.id, 'content length:', message.content.length);
+    debugConsole.log('ChatView: updateMessage called for message:', message.id, 'content length:', message.content.length);
     const component = this.messageComponents.get(message.id);
     if (component) {
-      console.log('ChatView: updating component');
+      debugConsole.log('ChatView: updating component');
       component.updateMessage(message);
     } else {
-      console.log('ChatView: component not found for message:', message.id);
+      debugConsole.log('ChatView: component not found for message:', message.id);
     }
   }
 
@@ -734,7 +735,7 @@ export class ChatView extends ItemView {
    * Render a single message
    */
   private renderMessage(message: ChatMessage): void {
-    console.log('ChatView: renderMessage called with:', message);
+    debugConsole.log('ChatView: renderMessage called with:', message);
     
     const component = new ChatMessageComponent(message, {
       onEdit: this.handleMessageEdit.bind(this),
@@ -743,14 +744,14 @@ export class ChatView extends ItemView {
       onRegenerate: this.handleMessageRegenerate.bind(this)
     }, this.renderingMode);
     
-    console.log('ChatView: message component created');
+    debugConsole.log('ChatView: message component created');
     
     this.messageComponents.set(message.id, component);
     const element = component.getElement();
-    console.log('ChatView: component element:', element);
+    debugConsole.log('ChatView: component element:', element);
     
     this.messagesContainer.appendChild(element);
-    console.log('ChatView: element appended to container');
+    debugConsole.log('ChatView: element appended to container');
   }
 
   /**

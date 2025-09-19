@@ -17,6 +17,7 @@ export interface VaultBotPluginSettings {
 	chatSeparator: string;
 	aiProviderSettings: Record<string, AIProviderSettings>;
 	recordApiCalls: boolean;
+	debugMode?: boolean;
 	includeDatetime?: boolean;
 	includeCurrentNote?: boolean;
 	includeOpenNotes?: boolean;
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: VaultBotPluginSettings = {
 	apiProvider: 'openai',
 	chatSeparator: '\n\n----\n\n',
 	recordApiCalls: true,
+	debugMode: false,
 	includeDatetime: true,
 	includeCurrentNote: true,
 	includeOpenNotes: false,

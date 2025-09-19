@@ -123,6 +123,23 @@ export function renderRecordingToggle(
       }));
 }
 
+// Renders the Debug Mode toggle
+export function renderDebugModeToggle(
+  container: HTMLElement,
+  plugin: PluginLike,
+  save: (immediate?: boolean) => Promise<void> | void
+) {
+  new Setting(container)
+    .setName('Debug Mode')
+    .setDesc('Enable console logging for debugging purposes. When disabled, only errors will be logged.')
+    .addToggle(toggle => toggle
+      .setValue(plugin.settings.debugMode === true)
+      .onChange(async (value) => {
+        plugin.settings.debugMode = value;
+        await save();
+      }));
+}
+
 // Renders the Chat Separator text input field
 export function renderChatSeparatorField(
   container: HTMLElement,
@@ -211,6 +228,7 @@ export function renderCoreConfigSection(
     renderApiProviderSelector(container, plugin, reRender, save);
     renderApiKeyField(container, plugin, save);
     renderRecordingToggle(container, plugin, save);
+    renderDebugModeToggle(container, plugin, save);
     renderChatSeparatorField(container, plugin, save);
     renderChatSaveLocationField(container, plugin, save);
     renderChatAutoSaveToggle(container, plugin, save);

@@ -2,6 +2,7 @@ import { VaultBotPluginSettings } from './settings';
 import { type ChatMessage } from './recorder';
 import { ContentRetrievalService } from './services/content_retrieval';
 import { App, TFile } from 'obsidian';
+import { debugConsole } from './utils/debug';
 
 // Type for recording callback
 export type RecordingCallback = (messages: ChatMessage[], model: string, options: Record<string, any>) => void;
@@ -197,11 +198,11 @@ export class AIProviderWrapper {
                                     updatedContent = updatedContent.split(img.raw).join(replacement);
                                 }
                             } catch (err) {
-                                console.warn('Image upload failed, leaving original reference.', err);
+                                debugConsole.warn('Image upload failed, leaving original reference.', err);
                             }
                         }
                     } catch (err) {
-                        console.warn('Failed to process image uploads for retrieved notes:', err);
+                        debugConsole.warn('Failed to process image uploads for retrieved notes:', err);
                     }
 
                     enhancedMessages[i] = {

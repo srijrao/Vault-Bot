@@ -4,6 +4,7 @@
 
 import { ChatMessage } from './chat_types';
 import { MarkdownRenderer, Component } from 'obsidian';
+import { debugConsole } from '../utils/debug';
 
 export interface ChatMessageCallbacks {
   onEdit: (messageId: string, newContent: string) => void;
@@ -43,7 +44,7 @@ export class ChatMessageComponent {
    * Update message content and re-render
    */
   updateMessage(message: ChatMessage): void {
-    console.log('ChatMessageComponent: updateMessage called, old content length:', this.message.content.length, 'new content length:', message.content.length);
+    debugConsole.log('ChatMessageComponent: updateMessage called, old content length:', this.message.content.length, 'new content length:', message.content.length);
     this.message = message;
     this.render();
   }
@@ -60,13 +61,13 @@ export class ChatMessageComponent {
    * Create the message element
    */
   private createElement(): HTMLElement {
-    console.log('ChatMessageComponent: createElement called for message:', this.message);
+    debugConsole.log('ChatMessageComponent: createElement called for message:', this.message);
     
     const messageEl = document.createElement('div');
     messageEl.className = `chat-message chat-message-${this.message.role}`;
     messageEl.dataset.messageId = this.message.id;
     
-    console.log('ChatMessageComponent: element created with classes:', messageEl.className);
+    debugConsole.log('ChatMessageComponent: element created with classes:', messageEl.className);
     
     // Assign to this.element BEFORE calling render()
     this.element = messageEl;
@@ -74,7 +75,7 @@ export class ChatMessageComponent {
     this.render();
     this.attachEventListeners();
     
-    console.log('ChatMessageComponent: element fully created');
+    debugConsole.log('ChatMessageComponent: element fully created');
     
     return messageEl;
   }

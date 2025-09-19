@@ -6,6 +6,7 @@ import { loadChatFromNote } from './src/chat/note_loader';
 import { CommandHandler } from './src/command_handler';
 import { zipOldAiCalls } from './src/archiveCalls';
 import { VaultBotPluginSettings, DEFAULT_SETTINGS, VaultBotSettingTab } from './src/settings';
+import { initDebugMode } from './src/utils/debug';
 
 export default class VaultBotPlugin extends Plugin {
 	settings: VaultBotPluginSettings;
@@ -106,10 +107,12 @@ export default class VaultBotPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		initDebugMode(this.settings);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		initDebugMode(this.settings);
 		this.commandHandler.onSettingsChanged();
 		
 		// Refresh chat view if it's open
