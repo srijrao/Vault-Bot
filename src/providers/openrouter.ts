@@ -136,16 +136,47 @@ export class OpenRouterProvider implements AIProvider {
                 content: msg.content
             }));
 
-            const { textStream } = await streamText({
-                model,
-                messages: formattedMessages,
-                temperature: this.settings.temperature,
-                abortSignal: signal
-            });
+            // First attempt with user's configured temperature
+            try {
+                const { textStream } = await streamText({
+                    model,
+                    messages: formattedMessages,
+                    temperature: this.settings.temperature,
+                    abortSignal: signal
+                });
 
-            for await (const textPart of textStream) {
-                onUpdate(textPart);
+                for await (const textPart of textStream) {
+                    onUpdate(textPart);
+                }
+                return;
+            } catch (error: any) {
+                // Check if it's a temperature-related error
+                const errorMessage = error.message || error.toString();
+                const isTemperatureError = errorMessage.includes('temperature') && 
+                                         errorMessage.includes('does not support') && 
+                                         this.settings.temperature !== 1.0;
+                
+                if (isTemperatureError) {
+                    console.warn(`Model ${this.settings.model} rejected temperature=${this.settings.temperature}, retrying with temperature=1`);
+                    
+                    // Retry with temperature = 1
+                    const { textStream } = await streamText({
+                        model,
+                        messages: formattedMessages,
+                        temperature: 1.0,
+                        abortSignal: signal
+                    });
+
+                    for await (const textPart of textStream) {
+                        onUpdate(textPart);
+                    }
+                    return;
+                }
+                
+                // If it's not a temperature error, re-throw
+                throw error;
             }
+
         } catch (error: any) {
             // Check if it's an abort error
             if (error.name === 'AbortError') {

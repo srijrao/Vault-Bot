@@ -126,15 +126,45 @@ export class OpenAIProvider implements AIProvider {
                 content: msg.content
             }));
 
-            const stream = await this.openai.chat.completions.create({
-                model: this.settings.model,
-                messages: openaiMessages,
-                temperature: this.settings.temperature,
-                stream: true,
-            }, { signal });
+            // First attempt with user's configured temperature
+            try {
+                const stream = await this.openai.chat.completions.create({
+                    model: this.settings.model,
+                    messages: openaiMessages,
+                    temperature: this.settings.temperature,
+                    stream: true,
+                }, { signal });
 
-            for await (const chunk of stream) {
-                onUpdate(chunk.choices[0]?.delta?.content || '');
+                for await (const chunk of stream) {
+                    onUpdate(chunk.choices[0]?.delta?.content || '');
+                }
+                return;
+            } catch (error: any) {
+                // Check if it's a temperature-related error
+                const errorMessage = error.message || error.toString();
+                const isTemperatureError = errorMessage.includes('temperature') && 
+                                         errorMessage.includes('does not support') && 
+                                         this.settings.temperature !== 1.0;
+                
+                if (isTemperatureError) {
+                    console.warn(`Model ${this.settings.model} rejected temperature=${this.settings.temperature}, retrying with temperature=1`);
+                    
+                    // Retry with temperature = 1
+                    const stream = await this.openai.chat.completions.create({
+                        model: this.settings.model,
+                        messages: openaiMessages,
+                        temperature: 1.0,
+                        stream: true,
+                    }, { signal });
+
+                    for await (const chunk of stream) {
+                        onUpdate(chunk.choices[0]?.delta?.content || '');
+                    }
+                    return;
+                }
+                
+                // If it's not a temperature error, re-throw
+                throw error;
             }
 
         } catch (error: any) {
