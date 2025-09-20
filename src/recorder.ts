@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { writeAtomic } from './fs_utils';
+import { resolveAiCallsDir } from './storage_paths';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | string;
@@ -89,40 +91,6 @@ function chooseFence(...blocks: string[]): string {
 
 function ensureLf(text: string): string {
   return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-}
-
-async function writeAtomic(filePath: string, contents: string, maxRetries = 3): Promise<void> {
-  const dir = path.dirname(filePath);
-  await fs.promises.mkdir(dir, { recursive: true });
-  const tmp = path.join(dir, `${path.basename(filePath)}.tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-
-  const data = Buffer.from(contents, 'utf8');
-  let fh: fs.promises.FileHandle | null = null;
-  try {
-    fh = await fs.promises.open(tmp, 'w');
-    await fh.write(data, 0, data.length, 0);
-    try { await fh.sync(); } catch {}
-  } finally {
-    if (fh) await fh.close();
-  }
-
-  // Attempt atomic rename with simple retry/backoff in case of OneDrive locks
-  let attempt = 0;
-  while (true) {
-    try {
-      await fs.promises.rename(tmp, filePath);
-      break;
-    } catch (err: any) {
-      attempt++;
-      if (attempt > maxRetries) {
-        // Leave a partial to avoid data loss
-        const partial = filePath + `.partial-${Date.now()}`;
-        try { await fs.promises.rename(tmp, partial); } catch {}
-        throw err;
-      }
-      await new Promise(res => setTimeout(res, 200 * attempt));
-    }
-  }
 }
 
 export async function recordChatCall(params: {
@@ -248,23 +216,4 @@ export async function recordChatCall(params: {
     console.error('Failed to record chat call:', error);
     return { error: error?.message || 'Unknown error' };
   }
-}
-
-export function resolveAiCallsDir(appLike?: any): string {
-  try {
-    // Try to use Obsidian vault path when available
-    const basePath = appLike?.vault?.adapter?.basePath || appLike?.vault?.adapter?.getBasePath?.();
-    if (basePath && typeof basePath === 'string') {
-      return path.join(basePath, '.obsidian', 'plugins', 'Vault-Bot', 'ai-calls');
-    }
-  } catch {}
-  
-  // Check if we're in a test environment
-  const isTestEnv = process.env.NODE_ENV === 'test' || 
-                   process.env.VITEST === 'true' || 
-                   typeof global !== 'undefined' && (global as any).__vitest__ ||
-                   typeof globalThis !== 'undefined' && (globalThis as any).__vitest__;
-  
-  // Fallback: use ai-calls-test during tests, ai-calls otherwise
-  return path.resolve(isTestEnv ? 'ai-calls-test' : 'ai-calls');
 }

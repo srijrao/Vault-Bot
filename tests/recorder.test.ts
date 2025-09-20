@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { recordChatCall, resolveAiCallsDir } from '../src/recorder';
+import { recordChatCall } from '../src/recorder';
+import { resolveAiCallsDir } from '../src/storage_paths';
 import * as fs from 'fs';
 import * as path from 'path';
 import { vi } from 'vitest';

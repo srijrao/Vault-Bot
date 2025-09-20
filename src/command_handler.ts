@@ -1,7 +1,8 @@
 import { Editor, MarkdownView, Notice } from 'obsidian';
 import { AIProviderWrapper, AIMessage } from './aiprovider';
 import VaultBotPlugin from '../main';
-import { recordChatCall, resolveAiCallsDir, type ChatRequestRecord, type ChatResponseRecord, type ChatMessage } from './recorder';
+import { recordChatCall, type ChatRequestRecord, type ChatResponseRecord, type ChatMessage } from './recorder';
+import { resolveAiCallsDir } from './storage_paths';
 import { redactMessages } from './redaction';
 
 type Direction = 'above' | 'below';

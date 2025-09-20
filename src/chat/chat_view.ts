@@ -13,12 +13,15 @@ import {
   generateConversationTitle 
 } from './chat_types';
 import { ChatStorage } from './chat_storage';
+import { resolveStorageDir } from '../storage_paths';
+import * as path from 'path';
 import { NoteSaver } from './note_saver';
 import { NoteLoader, loadChatFromNote } from './note_loader';
 import { ChatMessageComponent } from './chat_message';
 import { AIProviderWrapper, AIMessage } from '../aiprovider';
 import { generateTitle } from '../utils/title_generator';
-import { recordChatCall, type ChatMessage as RecorderChatMessage, type ChatRequestRecord, type ChatResponseRecord, resolveAiCallsDir } from '../recorder';
+import { recordChatCall, type ChatMessage as RecorderChatMessage, type ChatRequestRecord, type ChatResponseRecord } from '../recorder';
+import { resolveAiCallsDir } from '../storage_paths';
 import { debugConsole } from '../utils/debug';
 
 export const CHAT_VIEW_TYPE = 'vault-bot-chat';
@@ -250,7 +253,8 @@ export class ChatView extends ItemView {
   private async loadLastActiveConversation(): Promise<ChatConversation | null> {
     try {
       const adapter = this.app.vault.adapter;
-      const activeConversationPath = `${this.plugin.manifest.dir}/active_conversation.json`;
+      const activeConversationDir = resolveStorageDir('active-conversation', this.app);
+      const activeConversationPath = path.join(activeConversationDir, 'active_conversation.json');
       
       if (await adapter.exists(activeConversationPath)) {
         const data = await adapter.read(activeConversationPath);
@@ -281,7 +285,13 @@ export class ChatView extends ItemView {
     
     try {
       const adapter = this.app.vault.adapter;
-      const activeConversationPath = `${this.plugin.manifest.dir}/active_conversation.json`;
+      const activeConversationDir = resolveStorageDir('active-conversation', this.app);
+      const activeConversationPath = path.join(activeConversationDir, 'active_conversation.json');
+      
+      // Ensure the directory exists
+      if (!(await adapter.exists(activeConversationDir))) {
+        await adapter.mkdir(activeConversationDir);
+      }
       
       // Prepare data for saving (convert dates to strings)
       const dataToSave = {

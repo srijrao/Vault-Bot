@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { resolveAiCallsDir } from '../src/storage_paths';
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
 }));
@@ -60,7 +61,7 @@ describe('zipOldAiCalls', () => {
 
   it('sorts into date folders, then creates solid 7z per previous day and removes the date folder; skips today', async () => {
     const appLike = buildAppLike(tmpRoot);
-    const aiDir = path.join(tmpRoot, '.obsidian', 'plugins', 'Vault-Bot', 'ai-calls');
+    const aiDir = resolveAiCallsDir(appLike);
 
     // Previous day files in both naming schemes + a mtime-based fallback
     await writeFile(path.join(aiDir, `vault-bot_${prevKey.replace(/-/g, '')}_openai_gpt-4o_abcde.txt`), 'prev A');
@@ -103,7 +104,7 @@ describe('zipOldAiCalls', () => {
 
   it('does not fallback; leaves date folder and files if 7z fails', async () => {
     const appLike = buildAppLike(tmpRoot);
-    const aiDir = path.join(tmpRoot, '.obsidian', 'plugins', 'Vault-Bot', 'ai-calls');
+    const aiDir = resolveAiCallsDir(appLike);
 
     await writeFile(path.join(aiDir, `vault-bot_${prevKey.replace(/-/g, '')}_openai_xxx_abcd1.txt`), 'prev only');
 

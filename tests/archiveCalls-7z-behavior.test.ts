@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { resolveAiCallsDir } from '../src/storage_paths';
 
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
@@ -40,7 +41,8 @@ describe('7z behavior', () => {
 
   it('prefers local bin/7za if present; falls back to package path otherwise', async () => {
     const root = await mkdtemp();
-    const aiDir = path.join(root, '.obsidian', 'plugins', 'Vault-Bot', 'ai-calls');
+    const appLike = { vault: { adapter: { basePath: root } } } as any;
+    const aiDir = resolveAiCallsDir(appLike);
     const binDir = path.join(root, 'bin');
 
     // Create a fake file for yesterday
@@ -66,13 +68,14 @@ describe('7z behavior', () => {
       return events;
     });
 
-    const appLike = { vault: { adapter: { basePath: root } } } as any;
-    await zipOldAiCalls(appLike, now);
+    const appLike1 = { vault: { adapter: { basePath: root } } } as any;
+    await zipOldAiCalls(appLike1, now);
   });
 
   it('on failure, does not delete or modify outside the ai-calls area', async () => {
     const root = await mkdtemp();
-    const aiDir = path.join(root, '.obsidian', 'plugins', 'Vault-Bot', 'ai-calls');
+    const appLike2 = { vault: { adapter: { basePath: root } } } as any;
+    const aiDir = resolveAiCallsDir(appLike2);
     const outside = path.join(root, 'outside.txt');
     await fs.promises.writeFile(outside, 'keep');
     await writeFile(path.join(aiDir, `vault-bot_${prevKey.replace(/-/g, '')}_bar.txt`), 'prev');
@@ -87,8 +90,7 @@ describe('7z behavior', () => {
       return events;
     });
 
-    const appLike = { vault: { adapter: { basePath: root } } } as any;
-    await zipOldAiCalls(appLike, now);
+    await zipOldAiCalls(appLike2, now);
 
     // Should not touch files outside the ai-calls directory
     expect(await fs.promises.readFile(outside, 'utf8')).toBe('keep');

@@ -21,6 +21,12 @@ data.json
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
 *.log
+
+# History folder contains all plugin data (ai-calls, chats, active conversations)
+history/
+history-test/
+
+# Legacy folders (kept for backward compatibility during migration)
 ai-calls/*
 ai-calls-test/*
 docs/template.md

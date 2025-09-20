@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { resolveAiCallsDir } from './recorder';
+import { resolveAiCallsDir } from './storage_paths';
 import { spawn } from 'child_process';
 import { path7za as path7zaPkg } from '7zip-bin';
 

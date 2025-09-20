@@ -1,5 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, Notice, Modal } from 'obsidian';
-import { resolveAiCallsDir } from './recorder';
+import { resolveAiCallsDir } from './storage_paths';
 import * as fs from 'fs';
 import * as path from 'path';
 import { exec, spawn } from 'child_process';

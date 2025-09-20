@@ -9,9 +9,9 @@ export class ChatStorage {
   private app: App;
   private dataDir: string;
 
-  constructor(app: App, pluginDataDir: string) {
+  constructor(app: App, pluginDataDir: string, chatsDirOverride?: string) {
     this.app = app;
-    this.dataDir = `${pluginDataDir}/chats`;
+    this.dataDir = chatsDirOverride || `${pluginDataDir}/chats`;
   }
 
   /**

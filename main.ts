@@ -7,6 +7,7 @@ import { CommandHandler } from './src/command_handler';
 import { zipOldAiCalls } from './src/archiveCalls';
 import { VaultBotPluginSettings, DEFAULT_SETTINGS, VaultBotSettingTab } from './src/settings';
 import { initDebugMode } from './src/utils/debug';
+import { needsMigration, migrateToHistoryStructure, createPreMigrationBackup } from './src/migration';
 
 export default class VaultBotPlugin extends Plugin {
 	settings: VaultBotPluginSettings;
@@ -14,6 +15,10 @@ export default class VaultBotPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		
+		// Check for migration needs and perform migration if necessary
+		await this.performMigrationIfNeeded();
+		
 		this.commandHandler = new CommandHandler(this);
 
 		// Register the side panel view
@@ -120,6 +125,37 @@ export default class VaultBotPlugin extends Plugin {
 		if (chatLeaves.length > 0) {
 			const chatView = chatLeaves[0].view as ChatView;
 			chatView.refreshModelInfo();
+		}
+	}
+
+	/**
+	 * Checks if migration from old file structure to new history structure is needed
+	 * and performs the migration automatically with backup
+	 */
+	async performMigrationIfNeeded() {
+		try {
+			const migrationContext = { vault: this.app.vault };
+			
+			if (await needsMigration(migrationContext)) {
+				console.log('Vault-Bot: Migration to history structure needed, starting migration...');
+				
+				// Create backup before migration
+				const backupPath = await createPreMigrationBackup(migrationContext);
+				if (backupPath) {
+					console.log(`Vault-Bot: Backup created at ${backupPath}`);
+				}
+				
+				// Perform migration
+				await migrateToHistoryStructure(migrationContext);
+				
+				console.log('Vault-Bot: Migration completed successfully');
+				
+				// Show notice to user
+				new (this.app as any).Notice('Vault-Bot: Successfully migrated data to new history structure');
+			}
+		} catch (error) {
+			console.error('Vault-Bot: Migration failed:', error);
+			new (this.app as any).Notice(`Vault-Bot: Migration failed - ${error.message}`, 5000);
 		}
 	}
 }
